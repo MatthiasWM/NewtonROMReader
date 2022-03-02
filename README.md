@@ -28,6 +28,7 @@ The last solder part is easy, but must not be forgotten. It's a jumper that
 set the power to 3V. Connect the two eyes marke with an asterisk (*).
 
 ```
+| Lower left corner of the PCB
 |
 | ooo ooo
 | ooo **o
