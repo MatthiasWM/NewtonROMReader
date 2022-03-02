@@ -78,5 +78,7 @@ Return to confirm your setup.
  - `s`: Check all connectors on the board fro short circuits. This tool helps
         verifying that there are no bridges in the DIMM connector soldering.
  - `e`: Check if the Flash memory is empty (all addresses return 0xFFFFFFFF).
- 
+ - `c`: Erase all sectors in the selected Flash area.
+ - `r`: Program the Flash with the content of the binary file named "ROM" which
+        should be copied to the SD Card in the programmer. 
   
