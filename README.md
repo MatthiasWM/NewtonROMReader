@@ -10,6 +10,12 @@ Using the alternative Flash ROM Board, the ROM Reader can also program the
 Flash chipd and create new ROM Boards with patched or alternative 
 operating systems. 
 
+## CAUTION
+
+ - Use an original Arduino Due. Do *NOT* use a Mega 2560!
+ - Never insert or remove the ROM card while the programmer is powered!
+ - All operations are final! There is no undo!
+
 ## Reader/Programmer
 
 Assembling the Programmer requires some advanced soldering skills. The pin 
@@ -28,12 +34,13 @@ The last solder part is easy, but must not be forgotten. It's a jumper that
 set the power to 3V. Connect the two eyes marke with an asterisk (*).
 
 ```
-| Lower left corner of the PCB
+:
+:   Lower left corner of the PCB
 |
 | ooo ooo
 | ooo **o
 |     ...... ........
-+---------------------
++--------------------- - -
 ``` 
 
 The Programmer board should be mounted on an Arduino Due. It *MUST NOT* be 
@@ -80,5 +87,7 @@ Return to confirm your setup.
  - `e`: Check if the Flash memory is empty (all addresses return 0xFFFFFFFF).
  - `c`: Erase all sectors in the selected Flash area.
  - `r`: Program the Flash with the content of the binary file named "ROM" which
-        should be copied to the SD Card in the programmer. 
+        should be copied to the SD Card in the programmer.
+ - 'vr': Verify the ROM content. This reads the "ROM" file again and compares
+        it word by word to the content of the the Flash memory.
   
