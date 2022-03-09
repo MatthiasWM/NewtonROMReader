@@ -406,7 +406,10 @@ unsigned long readWord(unsigned long w)
 unsigned long readWord()
 {
   unsigned long w = 0;
-  digitalWrite(eggROM_CS_0, 0); // select the chip
+  if (gCurrentAddress<0x01000000)
+    digitalWrite(eggROM_CS_0, 0); // select the chip
+  else
+    digitalWrite(eggROM_CS_1, 0); // select the chip
   digitalWrite(eggROM_IO_RD, 0); // read operation
   w = w << 1; if (digitalRead(eggD31)) w += 1;
   w = w << 1; if (digitalRead(eggD30)) w += 1;
@@ -441,7 +444,10 @@ unsigned long readWord()
   w = w << 1; if (digitalRead(eggD1)) w += 1;
   w = w << 1; if (digitalRead(eggD0)) w += 1;
   digitalWrite(eggROM_IO_RD, 1); // end of read operation
-  digitalWrite(eggROM_CS_0, 1); // deselect the chip
+  if (gCurrentAddress<0x01000000)
+    digitalWrite(eggROM_CS_0, 1); // deselect the chip
+  else
+    digitalWrite(eggROM_CS_1, 1); // deselect the chip
   return w;
 }
 
@@ -482,11 +488,17 @@ void writeWord(unsigned long a, unsigned long w)
   digitalWrite(eggD30, w & 1); w = w >> 1;
   digitalWrite(eggD31, w & 1); w = w >> 1;
 
-  digitalWrite(eggROM_CS_0, 0); // select the chip
+  if (gCurrentAddress<0x01000000)
+    digitalWrite(eggROM_CS_0, 0); // select the chip
+  else
+    digitalWrite(eggROM_CS_1, 0); // select the chip
   digitalWrite(eggROM_IO_WR, 0); // read operation
 
   digitalWrite(eggROM_IO_WR, 1); // end of read operation
-  digitalWrite(eggROM_CS_0, 1); // deselect the chip
+  if (gCurrentAddress<0x01000000)
+    digitalWrite(eggROM_CS_0, 0); // select the chip
+  else
+    digitalWrite(eggROM_CS_1, 0); // select the chip
   dataBus(0);
 }
 
@@ -672,14 +684,14 @@ void userCheckShortCicuits()
 
 // ---- Test Empty -------------------------------------------
 
-void checkEmpty()
+void checkEmpty(uint32_t inStart, uint32_t inEnd)
 {
   bool aborted = false;
   Serial.write("Checking (press Return to abort)...\n");
   Serial.write(".___.___.___.___.___.___.___.___.\n|");
   dataBus(0);
   uint32_t i;
-  for (i = 0; i < 0x00800000; i += 4) {
+  for (i = inStart; i < inEnd; i += 4) {
     uint32_t v = readWord(i);
     if (v != 0xFFFFFFFF) {
       Serial.write("\nValue mismatch at address ");
@@ -699,24 +711,32 @@ void checkEmpty()
   Serial.write("\n");
   if (aborted)
     Serial.write("Test aborted.\n");
-  else if (i == 0x00800000)
+  else if (i == inEnd)
     Serial.write("Flash memeory is empty and ready to be programmed.\n");
   else
     Serial.write("Flash memeory is not empty.\n");
   dataBus(0);
 }
 
-void userCheckEmpty()
+void userCheckEmptyROM()
 {
-  Serial.write("Check if Flash memory is empty\n\n");
+  Serial.write("Check if ROM Flash memory is empty\n\n");
   if (checkConfiguration(-1, 1) == false)
     return;
-  checkEmpty();
+  checkEmpty(0x00000000, 0x00800000);
+}
+
+void userCheckEmptyREx()
+{
+  Serial.write("Check if REx Flash memory is empty\n\n");
+  if (checkConfiguration(-1, 1) == false)
+    return;
+  checkEmpty(0x00800000, 0x01000000);
 }
 
 // ---- Erase Flash Memory -----------------------------------
 
-void eraseFlash()
+void eraseFlash(uint32_t inStart, uint32_t inEnd)
 {
   // Status:     bit7==0 if busy
   // if bit7==1: bit5==0 if erase successful
@@ -729,7 +749,7 @@ void eraseFlash()
 
   uint32_t addr = 0;
   int i = 0;
-  for (addr = 0; addr < 0x00800000; addr += 0x00040000) {
+  for (addr = inStart; addr < inEnd; addr += 0x00040000) {
     uint32_t w;
     // clear status register
     writeWord(0x0555 << 2, 0x00710071);
@@ -790,17 +810,25 @@ void eraseFlash()
     Serial.write("Flash memeory is erased and ready to be programmed.\n");
 }
 
-void userEraseFlash()
+void userEraseROM()
 {
-  Serial.write("Erase Flash memory\n\n");
+  Serial.write("Erase ROM memory\n\n");
   if (checkConfiguration(-1, 1) == false)
     return;
-  eraseFlash();
+  eraseFlash(0x00000000, 0x00800000);
+}
+
+void userEraseREx()
+{
+  Serial.write("Erase REx memory\n\n");
+  if (checkConfiguration(-1, 1) == false)
+    return;
+  eraseFlash(0x00800000, 0x01000000);
 }
 
 // ---- Program ROM File -------------------------------------
 
-void programROM()
+void programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 {
   bool aborted = false;
   Serial.write("Copying...\n");
@@ -809,12 +837,12 @@ void programROM()
   // FIXME: this can be MUCH faster
   initSDCard();
   // Write ROM file to Flash
-  if (!file.open("ROM", O_RDONLY)) {
+  if (!file.open(inFilename.c_str(), O_RDONLY)) {
     sd.errorHalt(F("open failed"));
   }
   file.rewind();
 #if 0 // program the Flash word by word
-  for (int i = 0; i < 8 * 1024 * 1024; i += 4) {
+  for (int i = inStart; i < inEnd; i += 4) {
     uint32_t v = 0, vv;
     file.read(&v, 4);
     vv = htonl(v);
@@ -828,7 +856,7 @@ void programROM()
   }
 #else // program the flash in chunks of 512 bytes per chip
   uint32_t nWords = 256;
-  for (uint32_t i = 0; i < 0x00800000; i += (4*nWords)) {
+  for (uint32_t i = inStart; i < inEnd; i += (4*nWords)) {
     // write sequence to prepare Flash for programming
     writeWord(0x0555 << 2, 0x00AA00AA);
     writeWord(0x02AA << 2, 0x00550055);
@@ -881,12 +909,20 @@ void userProgramROM()
   Serial.write("Programming ROM File\n\n");
   if (checkConfiguration(1, 1) == false)
     return;
-  programROM();
+  programFlash(0x00000000, 0x00800000, "ROM");
+}
+
+void userProgramREx()
+{
+  Serial.write("Programming REx File\n\n");
+  if (checkConfiguration(1, 1) == false)
+    return;
+  programFlash(0x00800000, 0x01000000, "REx");
 }
 
 // ---- Program ROM File -------------------------------------
 
-void verifyROM()
+void verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 {
   bool aborted = false;
   Serial.write("Verifying...\n");
@@ -895,11 +931,11 @@ void verifyROM()
   // FIXME: this can be MUCH faster
   initSDCard();
   // Compare ROM file and Flash
-  if (!file.open("ROM", O_RDONLY)) {
+  if (!file.open(inFilename.c_str(), O_RDONLY)) {
     sd.errorHalt(F("open failed")); // FIXME: fall back to Menu!
   }
   file.rewind();
-  for (int i = 0; i < 8 * 1024 * 1024; i += 4) {
+  for (uint32_t i = inStart; i < inEnd; i += 4) {
     uint32_t v = 0, vv, f;
     file.read(&v, 4);
     vv = htonl(v);
@@ -907,7 +943,7 @@ void verifyROM()
       Serial.write(":");
     f = readWord(i);
     if (f!=vv) {
-      Serial.write("\nROM file and Flash are not identical at address ");
+      Serial.write("\nFile and Flash are not identical at address ");
       printHex32(i);
       Serial.write(".\nFile: ");
       printHex32(vv);
@@ -935,8 +971,25 @@ void userVerifyROM()
   Serial.write("Verifying ROM File\n\n");
   if (checkConfiguration(1, 1) == false)
     return;
-  verifyROM();
+  verifyFlash(0x00000000, 0x00800000, "ROM");
 }
+
+void userVerifyREx()
+{
+  Serial.write("Verifying REx File\n\n");
+  if (checkConfiguration(1, 1) == false)
+    return;
+  verifyFlash(0x00800000, 0x01000000, "REx");
+}
+
+// ---- Test 1 -----------------------------------------------
+
+void userTest1()
+{
+  writeFlash(0x01000000, 0xbaadcafe);
+  writeFlash(0x01800000, 0x2b00b1e5);
+}
+
 // ---- Main Loop --------------------------------------------
 
 /**
@@ -947,27 +1000,39 @@ void loop()
 {
   Serial.write("\n\n");
   Serial.write("==============================\n");
-  Serial.write("  Newton ROM Programmer V0.1\n");
+  Serial.write("  Newton ROM Programmer V0.2\n");
   Serial.write("==============================\n\n");
-  switch (gScope) {
-    case 1:  Serial.write("  Scope: 8MB ROM (0x00000000-0x00800000)\n"); break;
-    default: Serial.write("  Scope: invalid\n");
-  }
-  Serial.write("  1: set scope to 8MB ROM\n");
-  Serial.write("\n");
-  Serial.write("  s:  check board for short circuits\n");
-  Serial.write("  e:  check if Flash is empty\n");
+  //switch (gScope) {
+  //  case 1:  Serial.write("  Scope: 8MB ROM (0x00000000-0x00800000)\n"); break;
+  //  default: Serial.write("  Scope: invalid\n");
+  //}
+  //Serial.write("  1: set scope to 8MB ROM\n");
+  //Serial.write("\n"); // Proposed menu: (h)ardware check, (e)rase, (c)heck empty, (r)ead, (w)rite, (v)erify
+  Serial.write("  s:  check board for short circuits\n\n");
+  Serial.write("ROM operations:\n\n"); 
+  Serial.write("  e:  check if ROM Flash is empty\n");
   //Serial.write("  q: quick check empty\n");
-  Serial.write("  c:  erase Flash memory\n");
+  Serial.write("  c:  erase ROM Flash memory\n");
   Serial.write("  r:  program \"ROM\" file to flash\n");
-  Serial.write("  vr: verify \"ROM\" file in flash\n");
+  Serial.write("  vr: verify \"ROM\" file in flash\n\n");
+  Serial.write("REx operations:\n\n"); 
+  Serial.write("  ex: check if REx Flash is empty\n");
+  Serial.write("  cx: erase REx Flash memory\n");
+  Serial.write("  x:  program \"REx\" file to flash\n");
+  Serial.write("  vx: verify \"REx\" file in flash\n");
+  //Serial.write("  t1: test pattern 1\n");
   Serial.write("\n> ");
   String s = Serial.readStringUntil('\n');
   Serial.print(s);
   Serial.write("\n\n");
   if (s.equals("s")) userCheckShortCicuits();
-  else if (s.equals("e")) userCheckEmpty();
-  else if (s.equals("c")) userEraseFlash();
+  else if (s.equals("e")) userCheckEmptyROM();
+  else if (s.equals("c")) userEraseROM();
   else if (s.equals("r")) userProgramROM();
   else if (s.equals("vr")) userVerifyROM();
+  else if (s.equals("ex")) userCheckEmptyREx();
+  else if (s.equals("cx")) userEraseREx();
+  else if (s.equals("x")) userProgramREx();
+  else if (s.equals("vx")) userVerifyREx();
+  else if (s.equals("t1")) userTest1();
 }
