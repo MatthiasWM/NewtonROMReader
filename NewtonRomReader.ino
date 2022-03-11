@@ -1,7 +1,22 @@
 
-// FIXME: change all outputs to high imp with pullups when not using a port/bus.
-// FIXME: remember if the user inserted the ROM board or the SD Card and don't ask unless we need changes
-// FIXME: dump ROM to SD Card
+/*
+ * To compile this frimware for the Newton ROM Programmer
+ *  - downlaod and insatll the Arduino developer environment from arduino.cc
+ *  - install the SdFat library by Bill Greiman (Sketch > Include Library > Manage Libraries...)
+ *  - select the correct board (Tools > Board > Arduino ARM 32 > Arduino Due (Programming Port))
+ *  - connect to the Due Programming Port via USB and slect the serial port (Tools > Port)
+ *  - open this .ino file in the Arduino developer environment
+ *  - press Ctrl-R (Cmd-R on Mac) and the program should compile (there may be warnings, but no errors)
+ *  - press Ctrl-U (Cmd-U on Mac) to upload your frimware into your Due
+ *  - open the built-in Serial Monitor (Shift-Ctrl-M, Shift-Cmd-M), set the speed to 57600 baud.
+ *  - you should see the ROM Programmer's menu on the serial port screen.
+ */
+
+// TODO: change all outputs to high imp with pullups when not using a port/bus.
+// TODO: remember if the user inserted the ROM board or the SD Card and don't ask unless we need changes
+// TODO: dump ROM to SD Card
+
+#define SPI_DRIVER_SELECT 2
 
 #include <RingBuf.h>
 #include <SdFatConfig.h>
@@ -18,6 +33,12 @@
 
 #if SPI_DRIVER_SELECT != 2
 #error
+// If this error is triggered, you downloaded an old version of SdFat. 
+// Please download the current version (Sketch > Include Library > Manage Libraries...)
+// The enter "sdfat" in the search fiel and download or update the version by Bill Greiman.
+//
+// If everything still fails, edit the SPI_DRIVER_SELECT line in SdFatConfig.h
+// On my machine it's at /Users/matt/Documents/Arduino/libraries/SdFat/src/SdFatConfig.h
 #endif
 
 #define SD_FAT_TYPE 0
