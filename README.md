@@ -7,7 +7,7 @@ boards. Besides the well know US and German ROM, we were able to read
 prototype ROM boards for further research.
 
 Using the alternative Flash ROM Board, the ROM Reader can also program the
-Flash chipd and create new ROM Boards with patched or alternative 
+Flash chips and create new ROM Boards with patched or alternative 
 operating systems. 
 
 ## CAUTION
@@ -52,7 +52,7 @@ SD Card slot, you have the wrong board!
 The Programmer communicates with the user via USB connection to the Programming
 port. No extra power connection is required. There is no extra software for
 the Programmer. User must use a serial terminal program to connect to via the 
-USB line (57600bps/baud 8N1).
+USB line (57600 bps/baud 8N1).
 
 ## Firmware Source Code
 
@@ -61,25 +61,25 @@ installed within the Arduino system, and `SPI_DRIVER_SELECT` must be set to `2`
 in the `<SdFat.h>` header file.
 
 Load the `.ino` file and set the board to 'Arduino Due (Programming Port)`, 
-then chose the right port from the `Tools > Port` menu.
+then choose the right port from the `Tools > Port` menu.
 
-Open the serial monitor `Tools > Serail Monitor` and press `Ctrl-U` to upload
+Open the serial monitor `Tools > Serial Monitor` and press `Ctrl-U` to upload
 the firmware to the Programmer.  
 
 ## PCB Layout
 
-The Programmer PCB was designed with Eagle CAD 7.7.0 Stadard Edition. It's a
-two layer board with no exeptional requirements.
+The Programmer PCB was designed with Eagle CAD 7.7.0 Standard Edition. It's a
+two layer board with no exceptional requirements.
 
 The SO-DIMM 72 modules are not very common anymore and are somewhat hard to 
-find. The SD Card socket is a standard SMD part. Pin headers shoudl be 
-square shaped to fit the Arduino receptables well.
+find. The SD Card socket is a standard SMD part. Pin headers should be 
+square shaped to fit the Arduino receptacles well.
 
 ## Usage
 
 The Programmer writes a 90's style menu over the USB serial port connection.
 Functions can be selected by typing the command key and Return. Most commands
-will require confimation of the status of the programmer. Type "ok" and 
+will require confirmation of the status of the programmer. Type "ok" and 
 Return to confirm your setup.
 
  - `s`: Check all connectors on the board fro short circuits. This tool helps
