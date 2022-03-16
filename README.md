@@ -90,7 +90,7 @@ installed within the Arduino system `Tools > Manage Libraries...`.
 Load the `.ino` file and set the board to 'Arduino Due (Programming Port)`, 
 then choose the right port from the `Tools > Port` menu.
 
-Open the serial monitor `Tools > Serail Monitor` and press `Ctrl-U` to upload
+Open the serial monitor `Tools > Serial Monitor` and press `Ctrl-U` to upload
 the firmware to the Programmer.  
 
 ## PCB Layout
