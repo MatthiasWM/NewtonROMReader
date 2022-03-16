@@ -79,7 +79,7 @@ the SD Card slot, you have the wrong board!
 The Programmer communicates with the user via USB connection to the Programming
 port. No extra power connection is required. There is no extra software for
 the Programmer. Users must use a serial terminal program to connect via the 
-Programming USB port (57600bps/baud 8N1).
+Programming USB port (57600 bps/baud 8N1).
 
 ## Firmware Source Code
 
@@ -100,7 +100,7 @@ two layer board with no exeptional requirements.
 
 The SO-DIMM 72 modules are not very common anymore and are somewhat hard to 
 find. The SD Card socket is a standard SMD part. Pin headers should be 
-square shaped to fit the Arduino receptables well.
+square shaped to fit the Arduino receptacle well.
 
 ## Usage
 
