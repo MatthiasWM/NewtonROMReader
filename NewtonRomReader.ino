@@ -11,8 +11,6 @@
  *  - you should see the ROM Programmer's menu on the serial port screen.
  */
 
-// TODO: change all outputs to high imp with pullups when not using a port/bus.
-// TODO: remember if the user inserted the ROM board or the SD Card and don't ask unless we need changes
 // TODO: dump ROM to SD Card
 
 #include "NewtonROMReader.h"
@@ -642,7 +640,7 @@ void verifyFlash(Page &inPage)
 //   1   0  |  1   0  - access 0x0200.0000 to 0x03ff.ffff (32MB)
 //   1   1  |  1   1  - ROM disabled
 //
-//  Programmer
+//  MessagePad
 //   Address     ID    page #, filename
 // ----------------------------------------------------------
 // 0x0000.0000: ROM   (page 0, rom.bin)

@@ -10,12 +10,11 @@ static bool sAddressPinsUndefined = true;
 std::vector <Page> gPageList = {
   { 0x00000000, 0x00800000, "ROM page", "rom.bin" },
   { 0x00800000, 0x01000000, "ROM Extension 1", "rex1.bin" },
-  { 0x01000000, 0x01800000, "ROM Extension 2", "rex2.bin" },
-  { 0x01800000, 0x02000000, "ROM Extension 3", "rex3.bin" },
-  { 0x02000000, 0x02800000, "ROM Extension 4", "rex4.bin" },
+  { 0x02000000, 0x02800000, "ROM Extension 2", "rex2.bin" },
+  { 0x02800000, 0x03000000, "ROM Extension 3", "rex3.bin" },
   { 0x00000000, 0x01000000, "ROM & ext1", "romrex1.bin" },
-  { 0x01000000, 0x02000000, "ext2 & ext3", "rex23.bin" },
-  { 0x00000000, 0x02000000, "full card", "card.bin" },
+  { 0x02000000, 0x03000000, "ext2 & ext3", "rex23.bin" },
+//{ 0x00000000, 0x02000000, "full card", "card.bin" },
 };
 
 
@@ -226,13 +225,14 @@ uint32_t readWord(uint32_t inAddr)
 
 uint32_t readWord()
 {
-  uint32_t w = 0;
+  register uint32_t w = 0;
   
   if (gCurrentAddress & kAddrToCSMask)
     digitalWrite(eggROM_CS_1, 0); // select the upper half of the Flash chips
   else
     digitalWrite(eggROM_CS_0, 0); // select the lower half of the Flash chips
     
+#if 0 // universal
   digitalWrite(eggROM_IO_RD, 0); // read operation
   w = w << 1; if (digitalRead(eggD31)) w += 1;
   w = w << 1; if (digitalRead(eggD30)) w += 1;
@@ -267,6 +267,49 @@ uint32_t readWord()
   w = w << 1; if (digitalRead(eggD1)) w += 1;
   w = w << 1; if (digitalRead(eggD0)) w += 1;
   digitalWrite(eggROM_IO_RD, 1); // end of read operation
+#else // Due specific (saving about 40% of time on "Verify")
+  digitalWrite(eggROM_IO_RD, 0); // read operation
+  uint32_t portA = PIOA->PIO_PDSR;
+  uint32_t portB = PIOB->PIO_PDSR;
+  uint32_t portC = PIOC->PIO_PDSR;
+  uint32_t portD = PIOD->PIO_PDSR;
+  digitalWrite(eggROM_IO_RD, 1); // end of read operation
+  if (portA & PIO_PDSR_P0)  w |= PIO_PDSR_P18; // const int eggD18 = 69;  // PA0   A15;
+  if (portA & PIO_PDSR_P2)  w |= PIO_PDSR_P10; // const int eggD10 = A7;  // PA2
+  if (portA & PIO_PDSR_P4)  w |= PIO_PDSR_P9;  // const int eggD9  = A5;  // PA4
+  if (portA & PIO_PDSR_P6)  w |= PIO_PDSR_P8;  // const int eggD8  = A4;  // PA6
+  if (portA & PIO_PDSR_P7)  w |= PIO_PDSR_P23; // const int eggD23 = 31;  // PA7
+  if (portA & PIO_PDSR_P10) w |= PIO_PDSR_P13; // const int eggD13 = 19;  // PA10
+  if (portA & PIO_PDSR_P12) w |= PIO_PDSR_P12; // const int eggD12 = 17;  // PA12
+  if (portA & PIO_PDSR_P14) w |= PIO_PDSR_P19; // const int eggD19 = 23;  // PA14
+  if (portA & PIO_PDSR_P20) w |= PIO_PDSR_P31; // const int eggD31 = 43;  // PA20
+  if (portA & PIO_PDSR_P22) w |= PIO_PDSR_P7;  // const int eggD7  = A3;  // PA22
+  if (portA & PIO_PDSR_P24) w |= PIO_PDSR_P6;  // const int eggD6  = A1;  // PA24
+
+  if (portB & PIO_PDSR_P13) w |= PIO_PDSR_P14; // const int eggD14 = 21;  // PB13
+  if (portB & PIO_PDSR_P16) w |= PIO_PDSR_P17; // const int eggD17 = 67;  // PB16  A13;
+  if (portB & PIO_PDSR_P18) w |= PIO_PDSR_P15; // const int eggD15 = A9;  // PB18
+  if (portB & PIO_PDSR_P20) w |= PIO_PDSR_P16; // const int eggD16 = A11; // PB20
+  if (portB & PIO_PDSR_P25) w |= PIO_PDSR_P5;  // const int eggD5  = 2;   // PB25
+
+  if (portC & PIO_PDSR_P1)  w |= PIO_PDSR_P24; // const int eggD24 = 33;  // PC1
+  if (portC & PIO_PDSR_P3)  w |= PIO_PDSR_P25; // const int eggD25 = 35;  // PC3
+  if (portC & PIO_PDSR_P5)  w |= PIO_PDSR_P26; // const int eggD26 = 37;  // PC5
+  if (portC & PIO_PDSR_P7)  w |= PIO_PDSR_P27; // const int eggD27 = 39;  // PC7
+  if (portC & PIO_PDSR_P14) w |= PIO_PDSR_P28; // const int eggD28 = 49;  // PC14
+  if (portC & PIO_PDSR_P16) w |= PIO_PDSR_P29; // const int eggD29 = 47;  // PC16
+  if (portC & PIO_PDSR_P18) w |= PIO_PDSR_P30; // const int eggD30 = 45;  // PC18
+  if (portC & PIO_PDSR_P22) w |= PIO_PDSR_P2;  // const int eggD2  = 8;   // PC22
+  if (portC & PIO_PDSR_P24) w |= PIO_PDSR_P3;  // const int eggD3  = 6;   // PC24
+  if (portC & PIO_PDSR_P26) w |= PIO_PDSR_P4;  // const int eggD4  = 4;   // PC26
+  if (portC & PIO_PDSR_P29) w |= PIO_PDSR_P1;  // const int eggD1  = 10;  // PC29
+
+  if (portD & PIO_PDSR_P0)  w |= PIO_PDSR_P20; // const int eggD20 = 25;  // PD0
+  if (portD & PIO_PDSR_P2)  w |= PIO_PDSR_P21; // const int eggD21 = 27;  // PD2
+  if (portD & PIO_PDSR_P5)  w |= PIO_PDSR_P11; // const int eggD11 = 15;  // PD5
+  if (portD & PIO_PDSR_P6)  w |= PIO_PDSR_P22; // const int eggD22 = 29;  // PD6
+  if (portD & PIO_PDSR_P8)  w |= PIO_PDSR_P0;  // const int eggD0  = 12;  // PD8
+#endif
   
   if (gCurrentAddress & kAddrToCSMask)
     digitalWrite(eggROM_CS_1, 1); // deselect the upper half of the Flash chips
