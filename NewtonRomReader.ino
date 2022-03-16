@@ -1,4 +1,3 @@
-
 /*
  * To compile this frimware for the Newton ROM Programmer
  *  - downlaod and insatll the Arduino developer environment from arduino.cc
@@ -16,512 +15,137 @@
 // TODO: remember if the user inserted the ROM board or the SD Card and don't ask unless we need changes
 // TODO: dump ROM to SD Card
 
-#define SPI_DRIVER_SELECT 2
+#include "NewtonROMReader.h"
+#include "ROMCard.h"
+#include "SDCard.h"
+#include "menu.h"
+#include "otg.h"
 
-#include <RingBuf.h>
-#include <SdFatConfig.h>
-#include <sdios.h>
-#include <BufferedPrint.h>
-#include <FreeStack.h>
-#include <MinimumSerial.h>
-#include <SdFat.h>
-
-#define htonl(x) ( ((x)<<24 & 0xFF000000UL) | \
-                   ((x)<< 8 & 0x00FF0000UL) | \
-                   ((x)>> 8 & 0x0000FF00UL) | \
-                   ((x)>>24 & 0x000000FFUL) )
-
-#if SPI_DRIVER_SELECT != 2
-#error
-// If this error is triggered, you downloaded an old version of SdFat. 
-// Please download the current version (Sketch > Include Library > Manage Libraries...)
-// The enter "sdfat" in the search fiel and download or update the version by Bill Greiman.
-//
-// If everything still fails, edit the SPI_DRIVER_SELECT line in SdFatConfig.h
-// On my machine it's at /Users/matt/Documents/Arduino/libraries/SdFat/src/SdFatConfig.h
-#endif
-
-#define SD_FAT_TYPE 0
-const uint8_t SD_CS_PIN = 53;
-const uint8_t SOFT_MISO_PIN = 50; // DO
-const uint8_t SOFT_MOSI_PIN = 51; // DI
-const uint8_t SOFT_SCK_PIN  = 52;
-
-SoftSpiDriver<SOFT_MISO_PIN, SOFT_MOSI_PIN, SOFT_SCK_PIN> softSpi;
-#if ENABLE_DEDICATED_SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, DEDICATED_SPI, SD_SCK_MHZ(0), &softSpi)
-#else  // ENABLE_DEDICATED_SPI
-#define SD_CONFIG SdSpiConfig(SD_CS_PIN, SHARED_SPI, SD_SCK_MHZ(0), &softSpi)
-#endif  // ENABLE_DEDICATED_SPI
-
-SdFat sd;
-File file;
-
-int gScope = 1;
-
-uint32_t gCurrentAddress = 0;
-
-const int eggSD_DO = 50;
-const int eggSD_DI = 51;
-const int eggSD_CLK = 52;
-const int eggSD_CS = 53;
-
-const int eggRESET = A6;
-const int eggROM_CS_0 = 9;
-const int eggROM_CS_1 = 7;
-const int eggROM_IO_RD = 66; //A12;
-const int eggROM_IO_WR = 68; //A14;
-const int eggROM_IO_INT = 11;
-const int eggROM_IO_RDY = 13;
-const int eggPOWER_ENABLE = 41;
-const int eggSCLK = 32;
-
-const int eggA2  = 5;
-const int eggA3  = 3;
-const int eggA4  = A0;
-const int eggA5  = A2;
-const int eggA6  = 14;
-const int eggA7  = 16;
-const int eggA8  = 18;
-const int eggA9  = 20;
-const int eggA10 = A8;
-const int eggA11 = A10;
-const int eggA12 = 22;
-const int eggA13 = 24;
-const int eggA14 = 26;
-const int eggA15 = 28;
-const int eggA16 = 30;
-const int eggA17 = 36;
-const int eggA18 = 38;
-const int eggA19 = 40;
-const int eggA20 = 48;
-const int eggA21 = 46;
-const int eggA22 = 44;
-const int eggA23 = 42;
-const int eggA24 = 34;
-const int kAddrMin = 2;
-const int kAddrMax = 24;
-
-const uint32_t gAdrressLut[] = {
-  eggA2,  eggA2,  eggA2,  eggA3,  eggA4,  eggA5,  eggA6,  eggA7, 
-  eggA8,  eggA9,  eggA10, eggA11, eggA12, eggA13, eggA14, eggA15, 
-  eggA16, eggA17, eggA18, eggA19, eggA20, eggA21, eggA22, eggA23, 
-  eggA24
-};
-
-const int eggD0  = 12;
-const int eggD1  = 10;
-const int eggD2  = 8;
-const int eggD3  = 6;
-const int eggD4  = 4;
-const int eggD5  = 2;
-const int eggD6  = A1;
-const int eggD7  = A3;
-const int eggD8  = A4;
-const int eggD9  = A5;
-const int eggD10 = A7;
-const int eggD11 = 15;
-const int eggD12 = 17;
-const int eggD13 = 19;
-const int eggD14 = 21;
-const int eggD15 = A9;
-const int eggD16 = A11;
-const int eggD17 = 67; //A13;
-const int eggD18 = 69; //A15;
-const int eggD19 = 23;
-const int eggD20 = 25;
-const int eggD21 = 27;
-const int eggD22 = 29;
-const int eggD23 = 31;
-const int eggD24 = 33;
-const int eggD25 = 35;
-const int eggD26 = 37;
-const int eggD27 = 39;
-const int eggD28 = 49;
-const int eggD29 = 47;
-const int eggD30 = 45;
-const int eggD31 = 43;
-
-const unsigned char eggPin[] = {
-  eggSD_DO, eggSD_DI, eggSD_CLK, eggSD_CS,
-  eggRESET, eggROM_CS_0, eggROM_CS_1, eggROM_IO_RD, eggROM_IO_WR,
-  eggROM_IO_INT, eggROM_IO_RDY, eggPOWER_ENABLE, eggSCLK,
-  eggD0, eggD1, eggD2, eggD3, eggD4, eggD5, eggD6, eggD7,
-  eggD8, eggD9, eggD10, eggD11, eggD12, eggD13, eggD14, eggD15,
-  eggD16, eggD17, eggD18, eggD19, eggD20, eggD21, eggD22, eggD23,
-  eggD24, eggD25, eggD26, eggD27, eggD28, eggD29, eggD30, eggD31,
-  eggA2, eggA3, eggA4, eggA5, eggA6, eggA7,
-  eggA8, eggA9, eggA10, eggA11, eggA12, eggA13, eggA14, eggA15,
-  eggA16, eggA17, eggA18, eggA19, eggA20, eggA21, eggA22, eggA23,
-  eggA24
-};
-
-
-void printHex32(unsigned long v)
+/**
+ * Wait for a complete string, terminated by \n, while keeping the OTG system alive.
+ * 
+ * \return the string that was typed by the user, without the trailing \n.
+ */
+String serialReadString()
 {
-  static const char hex[] = "0123456789ABCDEF";
-  int i;
-  for (i = 0; i < 8; i++) {
-    unsigned long ix = (v >> 28) & 15;
-    Serial.print(hex[ix]);
-    v = v << 4;
+  String cmd;
+//  int prevState = 0;
+  for (;;) {
+    if (uhgogo) {
+      uhServer();
+    }
+//    if (uhstate.state!=prevState) {
+//      printf("State changed from %d to %d\n", prevState, uhstate.state);
+//      prevState = uhstate.state;
+//    }
+    if (Serial.available()>0) {
+      char s = Serial.read();
+      if (s=='\n')
+        return cmd;
+      cmd.concat(s);
+    }
   }
 }
 
+/**
+ * Print the name of a pin.
+ * 
+ * \param[in] i is *not* the pin number, but instead the position in the eggPin array.
+ */
 void printPin(int i)
 {
   if (i > 44) {
-    Serial.write("A");
-    Serial.print(i - 43);
+    printf("A%d", i-43);
     return;
   }
   if (i > 12) {
-    Serial.write("D");
-    Serial.print(i - 13);
+    printf("D%d", i-13);
     return;
   }
   switch (i) {
-    case 0: Serial.write("SD_DO"); break;
-    case 1: Serial.write("SD_DI"); break;
-    case 2: Serial.write("SD_CLK"); break;
-    case 3: Serial.write("SD_CS"); break;
-    case 4: Serial.write("RESET"); break;
-    case 5: Serial.write("ROM_CS_0"); break;
-    case 6: Serial.write("ROM_CS_1"); break;
-    case 7: Serial.write("ROM_IO_RD"); break;
-    case 8: Serial.write("ROM_IO_WR"); break;
-    case 9: Serial.write("ROM_IO_INT"); break;
-    case 10: Serial.write("ROM_IO_RDY"); break;
-    case 11: Serial.write("POWER_ENABLE"); break;
-    case 12: Serial.write("SCLK"); break;
+    case 0: printf("SD_DO"); break;
+    case 1: printf("SD_DI"); break;
+    case 2: printf("SD_CLK"); break;
+    case 3: printf("SD_CS"); break;
+    case 4: printf("RESET"); break;
+    case 5: printf("ROM_CS_0"); break;
+    case 6: printf("ROM_CS_1"); break;
+    case 7: printf("ROM_IO_RD"); break;
+    case 8: printf("ROM_IO_WR"); break;
+    case 9: printf("ROM_IO_INT"); break;
+    case 10: printf("ROM_IO_RDY"); break;
+    case 11: printf("POWER_ENABLE"); break;
+    case 12: printf("SCLK"); break;
   }
 }
 
+// ---- CheckShortCicuits ------------------------------------
 
 /**
-   Check if there are any short circuits between any of the
-   programmer pins and Vcc and Vss.
-*/
-void testForShortCircuits()
+ * Check if there are any short circuits between any of the
+ * programmer pins and Vss.
+ */
+int testForShortCircuits()
 {
-  size_t i, j;
-  // make all pins inputs with a pullup
-  for (i = 0; i < sizeof(eggPin); i++) {
-    pinMode(eggPin[i], INPUT_PULLUP);
-  }
-  // now check all pins for shortcuts agains ground
-  Serial.write("Testing for shorts to GND...\n");
-  for (i = 0; i < sizeof(eggPin); i++) {
+  int nShorts = 0;
+  
+  printf("Check Programmer For Short Circuits...\n\n");
+  
+  // set all pins to input with pullup
+  deactivateROMBus();
+  deactivateSDBus();
+  
+  // check all pins for shortcuts agains ground
+  printf("Testing for shorts to GND.\n");
+  for (size_t i = 0; i < sizeof(eggPin); i++) {
     if (digitalRead(eggPin[i]) == 0) {
-      Serial.write("ERROR: Pin ");
-      Serial.print(i);
-      Serial.write(" shorts with GND\n");
+      printf("[ERROR] : Pin ");
+      printPin(i);
+      printf(" shorts with GND\n");
+      nShorts++;
     }
   }
-  // no check every pin agains every other pin
-  Serial.write("Testing for shorts between pins...\n");
-  for (i = 0; i < sizeof(eggPin); i++) {
+  
+  // now check every pin against every other pin
+  printf("Testing for shorts between pins.\n");
+  for (size_t i = 0; i < sizeof(eggPin); i++) {
     digitalWrite(eggPin[i], 0);
     pinMode(eggPin[i], OUTPUT);
-    for (j = i + 1; j < sizeof(eggPin); j++) {
+    for (size_t j = i + 1; j < sizeof(eggPin); j++) {
       if (digitalRead(eggPin[j]) == 0) {
-        Serial.write("ERROR: ");
+        printf("[ERROR] : ");
         printPin(i);
-        Serial.write(" shorts with ");
+        printf(" shorts with ");
         printPin(j);
-        Serial.write("\n");
+        printf("\n");
+        nShorts++;
       }
     }
     digitalWrite(eggPin[i], 1);
     pinMode(eggPin[i], INPUT_PULLUP);
   }
-  Serial.write("\nDone.\n");
-}
 
-
-void setAddress(unsigned long a);
-
-void dataBus(int active)
-{
-  int mode = active ? OUTPUT : INPUT_PULLUP;
-  pinMode(eggD0, mode);
-  pinMode(eggD1, mode);
-  pinMode(eggD2, mode);
-  pinMode(eggD3, mode);
-  pinMode(eggD4, mode);
-  pinMode(eggD5, mode);
-  pinMode(eggD6, mode);
-  pinMode(eggD7, mode);
-  pinMode(eggD8, mode);
-  pinMode(eggD9, mode);
-  pinMode(eggD10, mode);
-  pinMode(eggD11, mode);
-  pinMode(eggD12, mode);
-  pinMode(eggD13, mode);
-  pinMode(eggD14, mode);
-  pinMode(eggD15, mode);
-  pinMode(eggD16, mode);
-  pinMode(eggD17, mode);
-  pinMode(eggD18, mode);
-  pinMode(eggD19, mode);
-  pinMode(eggD20, mode);
-  pinMode(eggD21, mode);
-  pinMode(eggD22, mode);
-  pinMode(eggD23, mode);
-  pinMode(eggD24, mode);
-  pinMode(eggD25, mode);
-  pinMode(eggD26, mode);
-  pinMode(eggD27, mode);
-  pinMode(eggD28, mode);
-  pinMode(eggD29, mode);
-  pinMode(eggD30, mode);
-  pinMode(eggD31, mode);
-}
-
-void setup()
-{
-  Serial.begin(57600);
-  Serial.setTimeout(-1);
-  //delay(5000); // give user time to start the serial terinal
-  Serial.write("Setup\n");
-
-  digitalWrite(eggRESET, 1);
-  pinMode(eggRESET, OUTPUT); // inv
-  digitalWrite(eggROM_CS_0, 1);
-  pinMode(eggROM_CS_0, OUTPUT); // inv
-  digitalWrite(eggROM_CS_1, 1);
-  pinMode(eggROM_CS_1, OUTPUT); // inv
-  digitalWrite(eggROM_IO_RD, 1);
-  pinMode(eggROM_IO_RD, OUTPUT);
-  digitalWrite(eggROM_IO_WR, 1);
-  pinMode(eggROM_IO_WR, OUTPUT);
-  pinMode(eggROM_IO_INT, INPUT);
-  pinMode(eggROM_IO_RDY, INPUT);
-  digitalWrite(eggPOWER_ENABLE, 1);
-  pinMode(eggPOWER_ENABLE, OUTPUT);
-  digitalWrite(eggSCLK, 1);
-  pinMode(eggSCLK, OUTPUT);
-
-  setAddress(0);
-  pinMode(eggA2, OUTPUT);    // 0x00000004
-  pinMode(eggA3, OUTPUT);    // 0x00000008
-  pinMode(eggA4, OUTPUT);    // 0x00000010
-  pinMode(eggA5, OUTPUT);    // 0x00000020
-  pinMode(eggA6, OUTPUT);    // 0x00000040
-  pinMode(eggA7, OUTPUT);    // 0x00000080
-  pinMode(eggA8, OUTPUT);    // 0x00000100
-  pinMode(eggA9, OUTPUT);    // 0x00000200
-  pinMode(eggA10, OUTPUT);   // 0x00000400
-  pinMode(eggA11, OUTPUT);   // 0x00000800
-  pinMode(eggA12, OUTPUT);   // 0x00001000
-  pinMode(eggA13, OUTPUT);   // 0x00002000
-  pinMode(eggA14, OUTPUT);   // 0x00004000
-  pinMode(eggA15, OUTPUT);   // 0x00008000
-  pinMode(eggA16, OUTPUT);   // 0x00010000
-  pinMode(eggA17, OUTPUT);   // 0x00020000
-  pinMode(eggA18, OUTPUT);   // 0x00040000
-  pinMode(eggA19, OUTPUT);   // 0x00080000
-  pinMode(eggA20, OUTPUT);   // 0x00100000
-  pinMode(eggA21, OUTPUT);   // 0x00200000
-  pinMode(eggA22, OUTPUT);   // 0x00400000
-  pinMode(eggA23, OUTPUT);   // 0x00800000
-  pinMode(eggA24, OUTPUT);   // 0x01000000
-
-  dataBus(0);
-}
-
-void initSDCard()
-{
-  if (!sd.begin(SD_CONFIG)) {
-    sd.initErrorHalt();
+  // Give the user the result
+  if (nShorts) {
+    printf("\n[ERROR] : %d short circuits found.\n", nShorts);
+    printf("[ERROR] : Please fix the board before using it.\n");
+  } else {
+    printf("\n[OK] : no short circuits found.\n");
   }
+
+  return nShorts;
 }
 
-
-void setAddress(uint32_t inAddress)
-{
-#if 0 // slower version
-  uint32_t a = inAddress;
-  a >>= 1;
-  a >>= 1;
-  digitalWrite(eggA2, a & 1); a >>= 1;
-  digitalWrite(eggA3, a & 1); a >>= 1;
-  digitalWrite(eggA4, a & 1); a >>= 1;
-  digitalWrite(eggA5, a & 1); a >>= 1;
-  digitalWrite(eggA6, a & 1); a >>= 1;
-  digitalWrite(eggA7, a & 1); a >>= 1;
-  digitalWrite(eggA8, a & 1); a >>= 1;
-  digitalWrite(eggA9, a & 1); a >>= 1;
-  digitalWrite(eggA10, a & 1); a >>= 1;
-  digitalWrite(eggA11, a & 1); a >>= 1;
-  digitalWrite(eggA12, a & 1); a >>= 1;
-  digitalWrite(eggA13, a & 1); a >>= 1;
-  digitalWrite(eggA14, a & 1); a >>= 1;
-  digitalWrite(eggA15, a & 1); a >>= 1;
-  digitalWrite(eggA16, a & 1); a >>= 1;
-  digitalWrite(eggA17, a & 1); a >>= 1;
-  digitalWrite(eggA18, a & 1); a >>= 1;
-  digitalWrite(eggA19, a & 1); a >>= 1;
-  digitalWrite(eggA20, a & 1); a >>= 1;
-  digitalWrite(eggA21, a & 1); a >>= 1;
-  digitalWrite(eggA22, a & 1); a >>= 1;
-  digitalWrite(eggA23, a & 1); a >>= 1;
-  digitalWrite(eggA24, a & 1); a >>= 1;
-#elif 0 // faster version
-  static bool firstCall = true;
-  if (firstCall) {
-    gCurrentAddress = ~inAddress;
-    firstCall = false;
-  }
-  uint32_t a = inAddress;
-  uint32_t m = inAddress ^ gCurrentAddress;
-  a >>= 1; m >>= 1;
-  a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA2, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA3, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA4, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA5, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA6, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA7, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA8, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA9, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA10, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA11, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA12, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA13, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA14, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA15, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA16, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA17, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA18, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA19, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA20, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA21, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA22, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA23, a & 1); a >>= 1; m >>= 1;
-  if (m&1) digitalWrite(eggA24, a & 1); a >>= 1; m >>= 1;
-#else
-  static bool firstCall = true;
-  if (firstCall) {
-    gCurrentAddress = ~inAddress;
-    firstCall = false;
-  }
-  uint32_t a = inAddress;
-  uint32_t m = inAddress ^ gCurrentAddress;
-  a >>= 1; m >>= 1;
-  a >>= 1; m >>= 1;
-  for (int i=kAddrMin; i<=kAddrMax; i++) {
-    if (m&1) digitalWrite(gAdrressLut[i], a & 1); 
-    a >>= 1; m >>= 1;
-  }
-#endif
-  gCurrentAddress = inAddress;
+/**
+ * User menu call to test board condition.
+ */
+void userCheckShortCicuits() {
+  testForShortCircuits();
 }
 
-unsigned long readWord(unsigned long w)
-{
-  setAddress(w);
-  return readWord();
-}
+// ----------------------------------------------------------
+// Verify the functions below.
 
-unsigned long readWord()
-{
-  unsigned long w = 0;
-  if (gCurrentAddress<0x01000000)
-    digitalWrite(eggROM_CS_0, 0); // select the chip
-  else
-    digitalWrite(eggROM_CS_1, 0); // select the chip
-  digitalWrite(eggROM_IO_RD, 0); // read operation
-  w = w << 1; if (digitalRead(eggD31)) w += 1;
-  w = w << 1; if (digitalRead(eggD30)) w += 1;
-  w = w << 1; if (digitalRead(eggD29)) w += 1;
-  w = w << 1; if (digitalRead(eggD28)) w += 1;
-  w = w << 1; if (digitalRead(eggD27)) w += 1;
-  w = w << 1; if (digitalRead(eggD26)) w += 1;
-  w = w << 1; if (digitalRead(eggD25)) w += 1;
-  w = w << 1; if (digitalRead(eggD24)) w += 1;
-  w = w << 1; if (digitalRead(eggD23)) w += 1;
-  w = w << 1; if (digitalRead(eggD22)) w += 1;
-  w = w << 1; if (digitalRead(eggD21)) w += 1;
-  w = w << 1; if (digitalRead(eggD20)) w += 1;
-  w = w << 1; if (digitalRead(eggD19)) w += 1;
-  w = w << 1; if (digitalRead(eggD18)) w += 1;
-  w = w << 1; if (digitalRead(eggD17)) w += 1;
-  w = w << 1; if (digitalRead(eggD16)) w += 1;
-  w = w << 1; if (digitalRead(eggD15)) w += 1;
-  w = w << 1; if (digitalRead(eggD14)) w += 1;
-  w = w << 1; if (digitalRead(eggD13)) w += 1;
-  w = w << 1; if (digitalRead(eggD12)) w += 1;
-  w = w << 1; if (digitalRead(eggD11)) w += 1;
-  w = w << 1; if (digitalRead(eggD10)) w += 1;
-  w = w << 1; if (digitalRead(eggD9)) w += 1;
-  w = w << 1; if (digitalRead(eggD8)) w += 1;
-  w = w << 1; if (digitalRead(eggD7)) w += 1;
-  w = w << 1; if (digitalRead(eggD6)) w += 1;
-  w = w << 1; if (digitalRead(eggD5)) w += 1;
-  w = w << 1; if (digitalRead(eggD4)) w += 1;
-  w = w << 1; if (digitalRead(eggD3)) w += 1;
-  w = w << 1; if (digitalRead(eggD2)) w += 1;
-  w = w << 1; if (digitalRead(eggD1)) w += 1;
-  w = w << 1; if (digitalRead(eggD0)) w += 1;
-  digitalWrite(eggROM_IO_RD, 1); // end of read operation
-  if (gCurrentAddress<0x01000000)
-    digitalWrite(eggROM_CS_0, 1); // deselect the chip
-  else
-    digitalWrite(eggROM_CS_1, 1); // deselect the chip
-  return w;
-}
-
-void writeWord(unsigned long a, unsigned long w)
-{
-  setAddress(a);
-  dataBus(1);
-  digitalWrite(eggD0, w & 1); w = w >> 1;
-  digitalWrite(eggD1, w & 1); w = w >> 1;
-  digitalWrite(eggD2, w & 1); w = w >> 1;
-  digitalWrite(eggD3, w & 1); w = w >> 1;
-  digitalWrite(eggD4, w & 1); w = w >> 1;
-  digitalWrite(eggD5, w & 1); w = w >> 1;
-  digitalWrite(eggD6, w & 1); w = w >> 1;
-  digitalWrite(eggD7, w & 1); w = w >> 1;
-  digitalWrite(eggD8, w & 1); w = w >> 1;
-  digitalWrite(eggD9, w & 1); w = w >> 1;
-  digitalWrite(eggD10, w & 1); w = w >> 1;
-  digitalWrite(eggD11, w & 1); w = w >> 1;
-  digitalWrite(eggD12, w & 1); w = w >> 1;
-  digitalWrite(eggD13, w & 1); w = w >> 1;
-  digitalWrite(eggD14, w & 1); w = w >> 1;
-  digitalWrite(eggD15, w & 1); w = w >> 1;
-  digitalWrite(eggD16, w & 1); w = w >> 1;
-  digitalWrite(eggD17, w & 1); w = w >> 1;
-  digitalWrite(eggD18, w & 1); w = w >> 1;
-  digitalWrite(eggD19, w & 1); w = w >> 1;
-  digitalWrite(eggD20, w & 1); w = w >> 1;
-  digitalWrite(eggD21, w & 1); w = w >> 1;
-  digitalWrite(eggD22, w & 1); w = w >> 1;
-  digitalWrite(eggD23, w & 1); w = w >> 1;
-  digitalWrite(eggD24, w & 1); w = w >> 1;
-  digitalWrite(eggD25, w & 1); w = w >> 1;
-  digitalWrite(eggD26, w & 1); w = w >> 1;
-  digitalWrite(eggD27, w & 1); w = w >> 1;
-  digitalWrite(eggD28, w & 1); w = w >> 1;
-  digitalWrite(eggD29, w & 1); w = w >> 1;
-  digitalWrite(eggD30, w & 1); w = w >> 1;
-  digitalWrite(eggD31, w & 1); w = w >> 1;
-
-  if (gCurrentAddress<0x01000000)
-    digitalWrite(eggROM_CS_0, 0); // select the chip
-  else
-    digitalWrite(eggROM_CS_1, 0); // select the chip
-  digitalWrite(eggROM_IO_WR, 0); // read operation
-
-  digitalWrite(eggROM_IO_WR, 1); // end of read operation
-  if (gCurrentAddress<0x01000000)
-    digitalWrite(eggROM_CS_0, 0); // select the chip
-  else
-    digitalWrite(eggROM_CS_1, 0); // select the chip
-  dataBus(0);
-}
 
 // missing connection in Data lines: 00200000 => D21 = pin 48
 // can't test all address lines without dumping the entire ROM
@@ -549,16 +173,14 @@ void printEnc(unsigned long v)
   v = v >> 6;
   d[5] = ascLut[v & 0x3f];
   d[6] = 0;
-  Serial.write(d);
+  printf("%s", d);
 }
 
 void writeFlash(uint32_t addr, uint32_t data)
 {
   if (addr & 0x00000003) {
-    Serial.write("writeFlash: address must be word aligned: ");
-    printHex32(addr);
-    Serial.write("\n");
-    for (;;) ;
+    printf("[INTERNAL_ERROR] : writeFlash: address must be word aligned: 0x%08lx\n", addr);
+    return;
   }
   writeWord(0x0555 << 2, 0x00AA00AA);
   writeWord(0x02AA << 2, 0x00550055);
@@ -568,208 +190,151 @@ void writeFlash(uint32_t addr, uint32_t data)
   delay(10);
   uint32_t w = readWord(addr);
   if (w != data) {
-    printHex32(addr);
-    Serial.write(": readback error: ");
-    printHex32(data);
-    Serial.write("!=");
-    printHex32(w);
-    Serial.write("\n");
-    for (;;) ;
+    printf("[ERROR] : readback failed at 0x%08lx: 0x%08lx!=0x%08lx\n",
+           addr, data, w);
   }
 }
 
-void loop_obsolete()
-{
-  Serial.write("Main\n");
+// ---- Print Memory -----------------------------------------
 
-//  unsigned long addr = 0;
-#if 0
-  // write in ASCII format
-  //  while (addr<0x800000) {
-  while (addr < 128) {
-    setAddress(addr);
-    unsigned long w = readWord();
-    printHex32(addr);
-    Serial.write(" ");
-    printHex32(w);
-    Serial.write("\n");
-    addr += 4;
-  }
-  // write entire ROM in uuencode with line checksum format
-#elif 0
-  // read status register
-  writeWord(0x0555 << 2, 0x00700070);
-  unsigned long w = readWord(0x0000);
-  printHex32(w);
-  Serial.write("\n");
-  // 7: Device REady
-  // 6: Erase Suspend Status
-  // 5: Erase Status
-  // 4: Program Statsu
-  // 3: Write Buffer Abort Status
-  // 2: Program Suspend Status
-  // 1: Sector Lock Status
-  // 0: Continuity Check
-#elif 0
-  writeWord(0x0555 << 2, 0x000000AA);
-  writeWord(0x02AA << 2, 0x00000055);
-  writeWord(0x0555 << 2, 0x000000A0);
-  writeWord(0, 0xFFFFFFFe);
-  unsigned long w = readWord(0);
-  Serial.write("Readback: ");
-  printHex32(w);
-  Serial.write("\n");
-#elif 1
-  // Write ROM file to Flash
-  if (!file.open("ROM", O_RDONLY)) {
-    sd.errorHalt(F("open failed"));
-  }
-  file.rewind();
-  for (int i = 0; i < 8 * 1024 * 1024; i += 4) {
-    uint32_t v = 0, vv;
-    file.read(&v, 4);
-    vv = htonl(v);
-    if ((i & 0x0000ffff) == 0) {
-      printHex32(i);
-      Serial.write(" ");
-      printHex32(vv);
-      Serial.write("\n");
+/**
+ * Read 512 bytes from memory and print a hex dump.
+ * 
+ * \param[in] addr start printing from this address
+ * \return true
+ */
+bool printMemoryBlock(uint32_t addr) 
+{
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+
+  for (uint32_t i=0; i<512; i+=16) {
+    printf("%08lx: ", addr+i);
+    uint32_t data[4];
+    for (uint32_t j=0; j<4; j++) {
+      data[j] = readWord(addr + i + j*4);
     }
-    writeFlash(i, vv);
-  }
-  file.close();
-  Serial.write("DONE\n");
-#elif 1
-  // Erase a sector:
-  writeWord(0x0555 << 2, 0x00AA00AA);
-  writeWord(0x02AA << 2, 0x00550055);
-  writeWord(0x0555 << 2, 0x00800080);
-  writeWord(0x0555 << 2, 0x00AA00AA);
-  writeWord(0x02AA << 2, 0x00550055);
-  writeWord(0, 0x00300030);
-  delay(300);
-  for (int i = 0; i < 64; i += 4) {
-    uint32_t w = readWord(i);
-    printHex32(w);
-    Serial.write("\n");
-  }
-#else
-  //  while (addr<0x800000) {
-  while (addr < 128) {
-    int i;
-    unsigned long w;
-    for (i = 0; i < 8; i++) {
-      setAddress(addr);
-      w = readWord();
-      printEnc(w);
-      addr += 4;
+    for (uint32_t j=0; j<4; j++) {
+      printf("%08lx", data[j]);
     }
-    Serial.write("\n");
+    printf(" |");
+    for (uint32_t j=0; j<4; j++) {
+      uint8_t c = data[j]>>24;
+      printf("%c", (c<32||c>126) ? '.' : c);
+      c = data[j]>>16;
+      printf("%c", (c<32||c>126) ? '.' : c);
+      c = data[j]>>8;
+      printf("%c", (c<32||c>126) ? '.' : c);
+      c = data[j];
+      printf("%c", (c<32||c>126) ? '.' : c);
+    }
+    printf("|\n");
   }
-#endif
-  for (;;)
-  {
-  }
+
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
+
+  return true;
 }
 
-// ---- Ask User Configuration -------------------------------
-
-// insertXX: 1=insert, 0=remove, -1=don't care
-bool checkConfiguration(int insertSD, int insertROM)
+/**
+ * Interactively print memeory blocks for current page.
+ */
+void userPrintMemory()
 {
-  if (insertSD == 0)
-    Serial.write("<<< Please remove the SD card from the programmer.   <<<\n");
-  else if (insertSD == 1)
-    Serial.write(">>> Please INSERT the SD card into the programmer.   >>>\n");
-  if (insertROM == 0)
-    Serial.write("<<< Please remove the ROM board from the programmer. <<<\n");
-  else if (insertROM == 1)
-    Serial.write(">>> Please INSERT the ROM board into the programmer. >>>\n");
-  Serial.write("Type 'ok' to continue.\n\n");
-  String s = Serial.readStringUntil('\n');
-  if (s.equals("ok"))
-    return true;
-  Serial.write("Aborted!\n\n");
-  return false;
-}
-
-// ---- CheckShortCicuits ------------------------------------
-
-void userCheckShortCicuits()
-{
-  Serial.write("Check Programmer For Short Circuits\n\n");
-  if (checkConfiguration(0, 0) == false)
-    return;
-  testForShortCircuits();
+  uint32_t addr = gPageList[gCurrentPage].pStart;
+  for (;;) {
+    printMemoryBlock(addr);
+    printf("Press [return] to continue, 'a'+[return] to abort.\n");
+    String s = serialReadString();
+    if (s.length()!=0) return;
+    addr += 512;
+  }
 }
 
 // ---- Test Empty -------------------------------------------
 
-void checkEmpty(uint32_t inStart, uint32_t inEnd)
+/**
+ * Check if a block of memory is empty, i.e. all 0xffffffff.
+ * 
+ * \param[in] inStart check starting at this address
+ * \param[in] inEnd check up to this address
+ * 
+ * \return true if the block is empty
+ */
+bool checkEmpty(uint32_t inStart, uint32_t inEnd)
 {
   bool aborted = false;
-  Serial.write("Checking (press Return to abort)...\n");
-  Serial.write(".___.___.___.___.___.___.___.___.\n|");
-  dataBus(0);
-  uint32_t i;
-  for (i = inStart; i < inEnd; i += 4) {
-    uint32_t v = readWord(i);
+  bool empty = true;
+  printf("Press Return to abort:\n");
+  printf(".___.___.___.___.___.___.___.___.\n|");
+  fflush(stdout);
+  
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+  
+  for (uint32_t addr = inStart; addr < inEnd; addr += 4) {
+    uint32_t v = readWord(addr);
     if (v != 0xFFFFFFFF) {
-      Serial.write("\nValue mismatch at address ");
-      printHex32(i);
-      Serial.write(": ");
-      printHex32(v);
-      Serial.write("\n");
+      printf("\nValue mismatch at address 0x%08lx: 0x%08lx\n", addr, v);
+      empty = false;
       break;
     }
     if (Serial.read() == '\n') {
       aborted = true;
       break;
     }
-    if ((i & 0x0003ffff) == 0)
-      Serial.write(":");
+    if ((addr & 0x0003ffff) == 0) {
+      printf(":"); 
+      fflush(stdout);
+    }
   }
-  Serial.write("\n");
+  
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
+
+  printf("\n");
   if (aborted)
-    Serial.write("Test aborted.\n");
-  else if (i == inEnd)
-    Serial.write("Flash memeory is empty and ready to be programmed.\n");
+    printf("[Aborted] : Test aborted by user.\n");
+  else if (empty)
+    printf("[OK] : Flash memory is empty and ready to be programmed.\n");
   else
-    Serial.write("Flash memeory is not empty.\n");
-  dataBus(0);
-}
-
-void userCheckEmptyROM()
-{
-  Serial.write("Check if ROM Flash memory is empty\n\n");
-  if (checkConfiguration(-1, 1) == false)
-    return;
-  checkEmpty(0x00000000, 0x00800000);
-}
-
-void userCheckEmptyREx()
-{
-  Serial.write("Check if REx Flash memory is empty\n\n");
-  if (checkConfiguration(-1, 1) == false)
-    return;
-  checkEmpty(0x00800000, 0x01000000);
+    printf("[Warning] : Flash memory is not empty.\n");
+    
+  return empty;
 }
 
 // ---- Erase Flash Memory -----------------------------------
 
-void eraseFlash(uint32_t inStart, uint32_t inEnd)
+/**
+ * Erase a block of memory (set it to all 0xffffffff).
+ * 
+ * \param[in] inStart erase process starting at this address
+ * \param[in] inEnd erase up to this address
+ * 
+ * \return true if the erase op did not trigger an error
+ */
+bool eraseFlash(uint32_t inStart, uint32_t inEnd)
 {
   // Status:     bit7==0 if busy
   // if bit7==1: bit5==0 if erase successful
   //             bit4==0 if programming was successful
 
-  bool aborted = false;
-  bool err = false;
-  Serial.write("Erasing...\n");
-  Serial.write(".___.___.___.___.___.___.___.___.\n|");
+  const int kEraseTimeout = 200;
+  int err = 0;
+  printf("Press Return to abort:\n");
+  printf(".___.___.___.___.___.___.___.___.\n|");
+  fflush(stdout);
 
-  uint32_t addr = 0;
-  int i = 0;
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+
+  uint32_t addr;
   for (addr = inStart; addr < inEnd; addr += 0x00040000) {
     uint32_t w;
     // clear status register
@@ -781,121 +346,123 @@ void eraseFlash(uint32_t inStart, uint32_t inEnd)
     writeWord(0x0555 << 2, 0x00AA00AA);
     writeWord(0x02AA << 2, 0x00550055);
     writeWord(addr, 0x00300030);
-    for (i = 0; i < 200; i++) {
-      delay(10); // Typical erase time: 62 * 10us = .6 seconds
+    int i;
+    for (i = 0; i < kEraseTimeout; i++) {
       // read status register
       writeWord(0x0555 << 2, 0x00700070);
       w = readWord(0);
       if ((w & 0x00800080) == 0x00800080)
         break;
+      delay(10); // Typical erase time: 62 * 10us = .6 seconds
     }
-    if (i == 100) // operation timed out
-      break;
-    // FIXME: if i==100 we timed out
-#if 0
-    delay(1);
-    writeWord(0x0555 << 2, 0x00700070);
-    w = readWord(0);
-    Serial.write("Sector at ");
-    printHex32(addr);
-    Serial.write(" cleared after ");
-    Serial.print(i);
-    Serial.write(" iterations, status is ");
-    printHex32(w);
-    Serial.write("\n");
-#else
-    delay(1);
-    writeWord(0x0555 << 2, 0x00700070);
-    w = readWord(0);
-    if ((w & 0x008f008f) == 0x00800080) {
-      Serial.write("x");
-    } else {
-      Serial.write("E");
-      err = true;
+    if (i == kEraseTimeout) { // operation timed out
+      err = 1; // timeout
       break;
     }
-#endif
+    if ((w & 0x00200020) != 0x00000000) {
+      err = 3; // erase operation failed
+      break;
+    }
     if (Serial.read() == '\n') {
-      aborted = true;
+      err = 2; // aborted
       break;
     }
+    printf(":");
+    fflush(stdout);
   }
-  Serial.write("\n");
-  if (aborted)
-    Serial.write("Erase operation aborted.\n");
-  else if (err)
-    Serial.write("Error erasing a sector.\n"); // FIXME: need more information
-  else if (i == 100)
-    Serial.write("Erase operation timed out.\n");
-  else
-    Serial.write("Flash memeory is erased and ready to be programmed.\n");
-}
 
-void userEraseROM()
-{
-  Serial.write("Erase ROM memory\n\n");
-  if (checkConfiguration(-1, 1) == false)
-    return;
-  eraseFlash(0x00000000, 0x00800000);
-}
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
 
-void userEraseREx()
-{
-  Serial.write("Erase REx memory\n\n");
-  if (checkConfiguration(-1, 1) == false)
-    return;
-  eraseFlash(0x00800000, 0x01000000);
+  printf("\n");
+  if (err==0) 
+    printf("[OK] : Flash memory is erased and ready to be programmed.\n");
+  else if (err==1)
+    printf("[ERROR] : Timeout error at address 0x%08lx.\n", addr);
+  else if (err==2)
+    printf("[Aborted] : Operation aborted by user.\n");
+  else if (err==3)
+    printf("[ERROR] : Erase operation failed at address 0x%08lx.\n", addr);
+    
+  return (err==0);
 }
 
 // ---- Program ROM File -------------------------------------
 
-void programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
+/**
+ * Program the contents of a file on SD Card or an OTG Drive to a block of Flash memory .
+ * 
+ * \param[in] inStart programming process starting at this address
+ * \param[in] inEnd program up to this address or until the end of file
+ * \param[in] inFilename write contents to this file
+ * 
+ * \return true if the write op did not trigger an error or warning
+ */
+bool programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 {
-  bool aborted = false;
-  Serial.write("Copying...\n");
-  Serial.write(".___.___.___.___.___.___.___.___.\n|");
-  // FIXME: add decent error handling
-  // FIXME: this can be MUCH faster
-  initSDCard();
-  // Write ROM file to Flash
-  if (!file.open(inFilename.c_str(), O_RDONLY)) {
-    sd.errorHalt(F("open failed"));
+  const int kWriteTimeout = 100;
+  int err = 0;
+  bool useSD = true;
+  FIL fd;
+
+  if (initSDCard()==false) {
+    if (uhstate.state!=UHSTAT_READY) {
+      printf("[ERROR] : No SD card found, no USB drive found.\n");
+      return false;
+    }
+    useSD = false;
   }
-  file.rewind();
-#if 0 // program the Flash word by word
-  for (int i = inStart; i < inEnd; i += 4) {
-    uint32_t v = 0, vv;
-    file.read(&v, 4);
-    vv = htonl(v);
-    if ((i & 0x0003ffff) == 0)
-      Serial.write("+");
-    writeFlash(i, vv);
-    if (Serial.read() == '\n') {
-      aborted = true;
-      break;
+
+  if (useSD) {
+    if (!file.open(inFilename.c_str(), O_RDONLY)) {
+      printf("[ERROR] : Can't open file \"%s\" on SD card.\n", inFilename.c_str());
+      return false;
+    }
+  } else {
+    if (f_open(&fd, inFilename.c_str(), FA_READ) != 0) {
+      printf("[ERROR] : Can't open file \"%s\" on USB drive.\n", inFilename.c_str());
+      return false;
     }
   }
-#else // program the flash in chunks of 512 bytes per chip
-  uint32_t nWords = 256;
-  for (uint32_t i = inStart; i < inEnd; i += (4*nWords)) {
+  
+  printf("Press Return to abort:\n");
+  printf(".___.___.___.___.___.___.___.___.\n|");
+  fflush(stdout);
+  
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+
+  const uint32_t nWords = 256;
+  uint32_t addr;
+  for (addr = inStart; addr < inEnd; addr += (4*nWords)) {
     // write sequence to prepare Flash for programming
     writeWord(0x0555 << 2, 0x00AA00AA);
     writeWord(0x02AA << 2, 0x00550055);
-    writeWord(i, 0x00250025); // i should be SA
-    writeWord(i, ((nWords-1)<<16)|(nWords-1)); // i should be SA, number of words to write
+    writeWord(addr, 0x00250025); // addr should be SA
+    writeWord(addr, ((nWords-1)<<16)|(nWords-1)); // addr should be SA, arg is number of words to write minus one
     // write buffer
     for (uint32_t j=0; j<nWords; j++) {
-      uint32_t v = 0, vv;
-      file.read(&v, 4);
-      vv = htonl(v);
-      writeWord(i+(j<<2), vv);
+      uint32_t vFile = 0xffffffff;
+      if (useSD) {
+        int n = file.read(&vFile, 4);
+        vFile = htonl(vFile);
+        if (n==0) err = 4;
+      } else {
+        UINT n = 0;
+        f_read (&fd, &vFile, 4, &n);
+        vFile = htonl(vFile);
+        if (n==0) err = 4;
+      }
+      writeWord(addr+(j<<2), vFile);
     }
     // confirm write
-    writeWord(i, 0x00290029); // i should be SA
+    writeWord(addr, 0x00290029); // addr should be SA
     // wait for operation to complete
     int t;
     uint32_t w;
-    for (t = 0; t < 100; t++) {
+    for (t = 0; t < kWriteTimeout; t++) {
       // read status register
       writeWord(0x0555 << 2, 0x00700070);
       w = readWord(0);
@@ -903,104 +470,160 @@ void programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
         break;
       delay(1); // There should be little to no delay needed.
     }
-    //Serial.write("Block programmed in ");
-    //Serial.print(t);
-    //Serial.write("us.\n");
-    // show progress
-    if ((i & 0x0003ffff) == 0)
-      Serial.write("+");
-    // check if user aborts
-    if (Serial.read() == '\n') {
-      aborted = true;
+    if (t == kWriteTimeout) {
+      err = 2; // timeout
       break;
     }
+    if ((w & 0x00100010) != 0x00000000) {
+      err = 3; // write operation failed
+      break;
+    }
+    if (Serial.read() == '\n') {
+      err = 1; // aborted
+      break;
+    }
+    if (err==4)
+      break;
+    if ((addr & 0x0003ffff) == 0) {
+      printf(":");
+      fflush(stdout);
+    }
   }
-#endif
-  file.close();
-  Serial.write("\n");
-  if (aborted)
-    Serial.write("Programming Flash operation aborted.\n");
-  else
-    Serial.write("File content copied to Flash.\n");
-  sd.end();
-}
 
-void userProgramROM()
-{
-  Serial.write("Programming ROM File\n\n");
-  if (checkConfiguration(1, 1) == false)
-    return;
-  programFlash(0x00000000, 0x00800000, "ROM");
-}
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
 
-void userProgramREx()
-{
-  Serial.write("Programming REx File\n\n");
-  if (checkConfiguration(1, 1) == false)
-    return;
-  programFlash(0x00800000, 0x01000000, "REx");
+  if (useSD) {
+    file.close();
+    sd.end();
+  } else {
+    f_close(&fd);
+  }
+
+  printf("\n");
+  if (err==0)
+    printf("[OK] : Successfully programmed Flash memory with file contents.\n");
+  else if (err==1)
+    printf("[Aborted] : Operation aborted by user. Flash memory partially written.\n");
+  else if (err==2)
+    printf("[ERROR] : Write operation timed out at address 0x%08lx.\n", addr);
+  else if (err==3)
+    printf("[ERROR] : Write operation failed at address 0x%08lx.\n", addr);
+  else if (err==4)
+    printf("[Warning] : Successfully programmed Flash to end of file at address 0x%08lx.\n"
+           "            Remaining memory unchanged.\n", addr);
+    
+  return (err==0);
 }
 
 // ---- Program ROM File -------------------------------------
 
-void verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
+/**
+ * Verify a block of Flash memeory to a file on SD Card or an OTG Drive.
+ * 
+ * \param[in] inStart verification process starting at this address
+ * \param[in] inEnd verify up to this address or until the end of file
+ * \param[in] inFilename compare to this file
+ * 
+ * \return true if the erase op did not trigger an error
+ */
+bool verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 {
-  bool aborted = false;
-  Serial.write("Verifying...\n");
-  Serial.write(".___.___.___.___.___.___.___.___.\n|");
-  // FIXME: add decent error handling
-  // FIXME: this can be MUCH faster
-  initSDCard();
-  // Compare ROM file and Flash
-  if (!file.open(inFilename.c_str(), O_RDONLY)) {
-    sd.errorHalt(F("open failed")); // FIXME: fall back to Menu!
+  int err = 0;
+  bool useSD = true;
+  FIL fd;
+
+  if (initSDCard()==false) {
+    if (uhstate.state!=UHSTAT_READY) {
+      printf("[ERROR] : No SD card found, no USB drive found.\n");
+      return false;
+    }
+    useSD = false;
   }
-  file.rewind();
-  for (uint32_t i = inStart; i < inEnd; i += 4) {
-    uint32_t v = 0, vv, f;
-    file.read(&v, 4);
-    vv = htonl(v);
-    if ((i & 0x0003ffff) == 0)
-      Serial.write(":");
-    f = readWord(i);
-    if (f!=vv) {
-      Serial.write("\nFile and Flash are not identical at address ");
-      printHex32(i);
-      Serial.write(".\nFile: ");
-      printHex32(vv);
-      Serial.write(", Flash: ");
-      printHex32(f);
-      Serial.write(".\n");
-      aborted = true;
+
+  if (useSD) {
+    if (!file.open(inFilename.c_str(), O_RDONLY)) {
+      printf("[ERROR] : Can't open file \"%s\" on SD card.\n", inFilename.c_str());
+      return false;
+    }
+  } else {
+    if (f_open(&fd, inFilename.c_str(), FA_READ) != 0) {
+      printf("[ERROR] : Can't open file \"%s\" on USB drive.\n", inFilename.c_str());
+      return false;
+    }
+  }
+  
+  printf("Press Return to abort:\n");
+  printf(".___.___.___.___.___.___.___.___.\n|");
+  fflush(stdout);
+  
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+  
+  uint32_t addr, vFile, vFlash;
+  for (addr = inStart; addr < inEnd; addr += 4) {
+    vFile = vFlash = 0xffffffff;
+    if (useSD) {
+      int n = file.read(&vFile, 4);
+      vFile = htonl(vFile);
+      if (n==0) {
+        err = 3;
+        break;
+      }
+    } else {
+      UINT n = 0;
+      f_read (&fd, &vFile, 4, &n);
+      vFile = htonl(vFile);
+      if (n==0) {
+        err = 3;
+        break;
+      }
+    }
+    vFlash = readWord(addr);
+    if (vFlash != vFile) {
+      err = 2;
       break;
     }
     if (Serial.read() == '\n') {
-      aborted = true;
+      err = 1;
       break;
     }
+    if ((addr & 0x0003ffff) == 0) {
+      printf(":");
+      fflush(stdout);
+    }
   }
-  file.close();
-  Serial.write("\n");
-  if (aborted)
-    Serial.write("Verifying Flash operation aborted.\n");
-  else
-    Serial.write("File content verified to Flash.\n");
+  
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
+
+  if (useSD) {
+    file.close();
+    sd.end();
+  } else {
+    f_close(&fd);
+  }
+
+  printf("\n");
+  if (err==0)
+    printf("[OK] : Flash memory and file contents are the same.\n");
+  else if (err==1)
+    printf("[Aborted] : Operation aborted by user.\n");
+  else if (err==2)
+    printf("[ERROR] : Contents differs at address 0x%08lx (0x%08lx!=0x%08lx).\n", addr, vFlash, vFile);
+  else if (err==3)
+    printf("[Warning] : Contents is the same up to end of file at address 0x%08lx.\n"
+           "            Remaining memory unchecked.\n", addr);
+    
+  return (err==0);
 }
 
-void userVerifyROM()
+void verifyFlash(Page &inPage)
 {
-  Serial.write("Verifying ROM File\n\n");
-  if (checkConfiguration(1, 1) == false)
-    return;
-  verifyFlash(0x00000000, 0x00800000, "ROM");
-}
-
-void userVerifyREx()
-{
-  Serial.write("Verifying REx File\n\n");
-  if (checkConfiguration(1, 1) == false)
-    return;
-  verifyFlash(0x00800000, 0x01000000, "REx");
+  verifyFlash(inPage.pStart, inPage.pEnd, inPage.pFilename);
 }
 
 // ---- Test 1 -----------------------------------------------
@@ -1011,49 +634,101 @@ void userTest1()
   writeFlash(0x01800000, 0x2b00b1e5);
 }
 
+// -----------------------------------------------------------
+
+void userCheckEmpty(int inPage)
+{
+  if (inPage==-1) 
+  inPage = gCurrentPage;
+  Page &pg = gPageList[inPage];
+  printf("Checking if \"%s\" is empty...\n", gPageList[gCurrentPage].pName);
+  checkEmpty(pg.pStart, pg.pEnd);
+}
+
+void userErasePage(int inPage)
+{
+  if (inPage==-1) 
+  inPage = gCurrentPage;
+  Page &pg = gPageList[inPage];
+
+  printf("Erasing \"%s\"...\n", gPageList[gCurrentPage].pName);
+  eraseFlash(pg.pStart, pg.pEnd);
+}
+
+void userWritePage(int inPage)
+{
+  if (inPage==-1) 
+  inPage = gCurrentPage;
+  Page &pg = gPageList[inPage];
+
+  printf("Writing file \"%s\" to \"%s\" page...\n",
+         gPageList[gCurrentPage].pFilename,
+         gPageList[gCurrentPage].pName);
+  programFlash(pg.pStart, pg.pEnd, pg.pFilename);
+}
+
+void userSelectPage(int inPage)
+{
+  gCurrentPage = inPage;
+}
+
+void userReadPage(int) {
+  // FIXME: write this!
+}
+
+// ---- Setup ------------------------------------------------
+
+/**
+ * Initialize all relevant pins in the system.
+ */
+void setup()
+{
+  // make sure that all pins are pulled-up inputs, so we have no power flowing
+  // even if there are shorts on the board.
+  setupROMBus();
+  setupSDBus();
+
+  // set up the serial communication
+  Serial.begin(57600);
+  while (!Serial) {
+    yield();
+  }
+
+  // Start the OTG driver, so we can read from a USB stick as well as from an SD Card
+  //uhstate.verbose = 1;   // set verbose= 1
+  uhgogo = 1;      // auto start server
+}
+
 // ---- Main Loop --------------------------------------------
 
 /**
-   Show the main menu, grab the user's selection, and run the
-   corresponding subroutine.
-*/
+ * Show the main menu, grab the user's selection, and run the
+ * corresponding subroutine.
+ */
 void loop()
 {
-  Serial.write("\n\n");
-  Serial.write("==============================\n");
-  Serial.write("  Newton ROM Programmer V0.2\n");
-  Serial.write("==============================\n\n");
-  //switch (gScope) {
-  //  case 1:  Serial.write("  Scope: 8MB ROM (0x00000000-0x00800000)\n"); break;
-  //  default: Serial.write("  Scope: invalid\n");
-  //}
-  //Serial.write("  1: set scope to 8MB ROM\n");
-  //Serial.write("\n"); // Proposed menu: (h)ardware check, (e)rase, (c)heck empty, (r)ead, (w)rite, (v)erify
-  Serial.write("  s:  check board for short circuits\n\n");
-  Serial.write("ROM operations:\n\n"); 
-  Serial.write("  e:  check if ROM Flash is empty\n");
-  //Serial.write("  q: quick check empty\n");
-  Serial.write("  c:  erase ROM Flash memory\n");
-  Serial.write("  r:  program \"ROM\" file to flash\n");
-  Serial.write("  vr: verify \"ROM\" file in flash\n\n");
-  Serial.write("REx operations:\n\n"); 
-  Serial.write("  ex: check if REx Flash is empty\n");
-  Serial.write("  cx: erase REx Flash memory\n");
-  Serial.write("  x:  program \"REx\" file to flash\n");
-  Serial.write("  vx: verify \"REx\" file in flash\n");
-  //Serial.write("  t1: test pattern 1\n");
-  Serial.write("\n> ");
-  String s = Serial.readStringUntil('\n');
-  Serial.print(s);
-  Serial.write("\n\n");
-  if (s.equals("s")) userCheckShortCicuits();
-  else if (s.equals("e")) userCheckEmptyROM();
-  else if (s.equals("c")) userEraseROM();
-  else if (s.equals("r")) userProgramROM();
-  else if (s.equals("vr")) userVerifyROM();
-  else if (s.equals("ex")) userCheckEmptyREx();
-  else if (s.equals("cx")) userEraseREx();
-  else if (s.equals("x")) userProgramREx();
-  else if (s.equals("vx")) userVerifyREx();
-  else if (s.equals("t1")) userTest1();
+  printf("\n\n");
+  printf("==============================\n");
+  printf("  Newton ROM Programmer V0.3\n");
+  printf("==============================\n\n");
+  
+  for (auto &menuitem : gMenuItemList) {
+    menuitem->print();
+  }
+  
+  printf("Current page is \"%s\" (\"%s\").\n",
+         gPageList[gCurrentPage].pName,
+         gPageList[gCurrentPage].pFilename);
+  
+  printf("\n> ");
+  fflush(stdout);
+  String s = serialReadString();
+  printf("%s\n\n", s.c_str());
+  
+  for (auto &menuitem : gMenuItemList) {
+    if (s.equals(menuitem->cmd())) {
+      menuitem->run();
+      break;
+    }
+  }
 }
