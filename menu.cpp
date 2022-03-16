@@ -18,7 +18,6 @@ public:
   void print() override { printf("  h:  hardware test\n"); }
   void run() override { userCheckShortCicuits(); }
 };
-
   
 // TODO: 01, 23, 123, 0123: Select multiple pages (romrex1.bin, rex23.bin, rex123.bin, all.bin)
 class SelectPageMenuItem : public MenuItem
@@ -105,6 +104,14 @@ public:
   }
 };
 
+class TestMenuItem : public MenuItem
+{
+public:
+  const char *cmd() override { return "t"; }
+  void print() override { printf("  t:  test\n"); }
+  void run() override { userTest1(); }
+};
+
 std::vector<MenuItem*> gMenuItemList = {
   new HardwareTestMenuItem(),
   new EmptyMenuItem(),
@@ -112,6 +119,7 @@ std::vector<MenuItem*> gMenuItemList = {
   new SelectPageMenuItem(1, "1", ""),
   new SelectPageMenuItem(2, "2", ""),
   new SelectPageMenuItem(3, "3", ""),
+  new SelectPageMenuItem(4, "4", ""),
   new EmptyMenuItem(),
   new PrintMemoryMenuItem(),
   new CheckEmptyMenuItem(),
@@ -120,4 +128,5 @@ std::vector<MenuItem*> gMenuItemList = {
   new WriteMenuItem(),
   new VerifyMenuItem(),
   new EmptyMenuItem(),
+  //new TestMenuItem(),
 };

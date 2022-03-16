@@ -12,6 +12,7 @@ std::vector <Page> gPageList = {
   { 0x00800000, 0x01000000, "ROM Extension 1", "rex1.bin" },
   { 0x01000000, 0x01800000, "ROM Extension 2", "rex2.bin" },
   { 0x01800000, 0x02000000, "ROM Extension 3", "rex3.bin" },
+  { 0x02000000, 0x02800000, "ROM Extension 4", "rex4.bin" },
   { 0x00000000, 0x01000000, "ROM & ext1", "romrex1.bin" },
   { 0x01000000, 0x02000000, "ext2 & ext3", "rex23.bin" },
   { 0x00000000, 0x02000000, "full card", "card.bin" },
@@ -98,7 +99,7 @@ void deactivateAddressBus() { addressBus(false); }
  */
 void setAddress(uint32_t inAddress)
 {
-#if 0 // slower version
+#if 1 // slower version
   uint32_t a = inAddress;
   a >>= 1;
   a >>= 1;
@@ -226,10 +227,12 @@ uint32_t readWord(uint32_t inAddr)
 uint32_t readWord()
 {
   uint32_t w = 0;
-  if (gCurrentAddress & 0x01000000)
+  
+  if (gCurrentAddress & kAddrToCSMask)
     digitalWrite(eggROM_CS_1, 0); // select the upper half of the Flash chips
   else
     digitalWrite(eggROM_CS_0, 0); // select the lower half of the Flash chips
+    
   digitalWrite(eggROM_IO_RD, 0); // read operation
   w = w << 1; if (digitalRead(eggD31)) w += 1;
   w = w << 1; if (digitalRead(eggD30)) w += 1;
@@ -264,10 +267,12 @@ uint32_t readWord()
   w = w << 1; if (digitalRead(eggD1)) w += 1;
   w = w << 1; if (digitalRead(eggD0)) w += 1;
   digitalWrite(eggROM_IO_RD, 1); // end of read operation
-  if (gCurrentAddress & 0x01000000)
+  
+  if (gCurrentAddress & kAddrToCSMask)
     digitalWrite(eggROM_CS_1, 1); // deselect the upper half of the Flash chips
   else
     digitalWrite(eggROM_CS_0, 1); // deselect the lower half of the Flash chips
+    
   return w;
 }
 
@@ -308,16 +313,18 @@ void writeWord(uint32_t a, uint32_t w)
   digitalWrite(eggD30, w & 1); w = w >> 1;
   digitalWrite(eggD31, w & 1); w = w >> 1;
 
-  if (gCurrentAddress & 0x01000000)
-    digitalWrite(eggROM_CS_1, 0); // select the chip
+  if (gCurrentAddress & kAddrToCSMask)
+    digitalWrite(eggROM_CS_1, 0); // select the upper half of the Flash chips
   else
-    digitalWrite(eggROM_CS_0, 0); // select the chip
+    digitalWrite(eggROM_CS_0, 0); // select the lower half of the Flash chips
+    
   digitalWrite(eggROM_IO_WR, 0); // read operation
-
   digitalWrite(eggROM_IO_WR, 1); // end of read operation
-  if (gCurrentAddress & 0x01000000)
-    digitalWrite(eggROM_CS_1, 0); // select the chip
+  
+  if (gCurrentAddress & kAddrToCSMask)
+    digitalWrite(eggROM_CS_1, 1); // deselect the upper half of the Flash chips
   else
-    digitalWrite(eggROM_CS_0, 0); // select the chip
-  deactivateDataBus();
+    digitalWrite(eggROM_CS_0, 1); // deselect the lower half of the Flash chips
+    
+  activateDataBusRead();
 }

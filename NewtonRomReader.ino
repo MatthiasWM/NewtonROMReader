@@ -628,10 +628,71 @@ void verifyFlash(Page &inPage)
 
 // ---- Test 1 -----------------------------------------------
 
+// ROM Board connectors:
+//        X[------ address bus --------]
+// 3322.2222:2222.1111:1111.11
+// 1098.7654:3210.9876:5432.1098:7654.3210
+// CS0 --> A25
+// CS0 & CS1 --> CE
+//
+//  CS0 CS1 | A25 CE
+// ---------+--------
+//   0   0  |  0   0  - not allowed
+//   0   1  |  0   0  - access 0x0000.0000 to 0x01ff.ffff (32MB)
+//   1   0  |  1   0  - access 0x0200.0000 to 0x03ff.ffff (32MB)
+//   1   1  |  1   1  - ROM disabled
+//
+//  Programmer
+//   Address     ID    page #, filename
+// ----------------------------------------------------------
+// 0x0000.0000: ROM   (page 0, rom.bin)
+// 0x0080.0000: REx1  (page 1, rex1.bin)
+// 0x0100.0000: fault, but could probably be mapped to REx2
+// 0x0180.0000: fault, but could probably be mapped to REx3
+// 0x1000.0000: REx4  (page 2, rex2.bin)
+// 0x1080.0000: REx5  (page 3, rex3.bin)
+// 0x1100.0000: REx6
+// 0x1180.0000: REx7
+// 0x1200.0000: REx4 mirror prev ROMs up to 0x2000.0000
+
+/**
+ * This writes a unique value at every 8MB block. 
+ * 
+ * I used Hammer to find these blocks again on the MessagePad. Turns 
+ * out that the first 16MB of ROM are mapped to address 0. The second 
+ * 16MB block is not mapped, but I have a feeling that modifying the 
+ * MMU LUT could map this block into the second 16MB of the system. 
+ * They would not be discovered by the NewtonOS though.
+ * 
+ * The upper 32MB of our board are mapped to 0x1000.0000. The first 
+ * 16MB can contain more ROM Extensions. I don't know if the remain 
+ * 16MB can be used by the OS.
+ */
 void userTest1()
 {
-  writeFlash(0x01000000, 0xbaadcafe);
-  writeFlash(0x01800000, 0x2b00b1e5);
+//eraseFlash(0x00000000, 0x00000000); // ROM + Apple REX 0
+//eraseFlash(0x00800000, 0x00800000); // REX 1
+  eraseFlash(0x01000000, 0x01000000); // REX 2
+  eraseFlash(0x01800000, 0x01800000); // REX 3
+  eraseFlash(0x02000000, 0x02000000); // ??
+  eraseFlash(0x02800000, 0x02800000); // ??
+  eraseFlash(0x03000000, 0x03000000); // ??
+  eraseFlash(0x03800000, 0x03800000); // ??
+
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+  
+  writeFlash(0x01000000, 0x52457832); // "REx2"
+  writeFlash(0x01800000, 0x52457833);
+  writeFlash(0x02000000, 0x52457834);
+  writeFlash(0x02800000, 0x52457835);
+  writeFlash(0x03000000, 0x52457836);
+  writeFlash(0x03800000, 0x52457837);
+  
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
 }
 
 // -----------------------------------------------------------
@@ -709,7 +770,7 @@ void loop()
 {
   printf("\n\n");
   printf("==============================\n");
-  printf("  Newton ROM Programmer V0.3\n");
+  printf("  Newton ROM Programmer V0.4\n");
   printf("==============================\n\n");
   
   for (auto &menuitem : gMenuItemList) {

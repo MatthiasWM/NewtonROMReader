@@ -58,6 +58,7 @@ const int eggA23 = 42;
 const int eggA24 = 34;
 const int kAddrMin = 2;
 const int kAddrMax = 24;
+const int kAddrToCSMask = 0x02000000;
 
 const uint32_t gAdrressLut[] = {
   eggA2,  eggA2,  eggA2,  eggA3,  eggA4,  eggA5,  eggA6,  eggA7, 
@@ -66,26 +67,26 @@ const uint32_t gAdrressLut[] = {
   eggA24
 };
 
-const int eggD0  = 12;
-const int eggD1  = 10;
-const int eggD2  = 8;
-const int eggD3  = 6;
-const int eggD4  = 4;
-const int eggD5  = 2;
-const int eggD6  = A1;
-const int eggD7  = A3;
-const int eggD8  = A4;
-const int eggD9  = A5;
-const int eggD10 = A7;
-const int eggD11 = 15;
-const int eggD12 = 17;
-const int eggD13 = 19;
-const int eggD14 = 21;
-const int eggD15 = A9;
-const int eggD16 = A11;
-const int eggD17 = 67; //A13;
-const int eggD18 = 69; //A15;
-const int eggD19 = 23;
+const int eggD0  = 12;  // PD8
+const int eggD1  = 10;  // PC29
+const int eggD2  = 8;   // PC22
+const int eggD3  = 6;   // PC24
+const int eggD4  = 4;   // PC26
+const int eggD5  = 2;   // PB25
+const int eggD6  = A1;  // PA24
+const int eggD7  = A3;  // PA22
+const int eggD8  = A4;  // PA6
+const int eggD9  = A5;  // PA4
+const int eggD10 = A7;  // PA2
+const int eggD11 = 15;  // PD5
+const int eggD12 = 17;  // PA12
+const int eggD13 = 19;  // PA10
+const int eggD14 = 21;  // PB13
+const int eggD15 = A9;  // PB18
+const int eggD16 = A11; // PB20
+const int eggD17 = 67;  // PB16  A13;
+const int eggD18 = 69;  // PA0   A15;
+const int eggD19 = 23;  // PD10
 const int eggD20 = 25;
 const int eggD21 = 27;
 const int eggD22 = 29;
