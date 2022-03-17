@@ -40,7 +40,8 @@ String serialReadString()
       char s = Serial.read();
       if (s=='\n')
         return cmd;
-      cmd.concat(s);
+      if (s!='\r')
+        cmd.concat(s);
     }
   }
 }
