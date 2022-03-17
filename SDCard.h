@@ -2,7 +2,7 @@
 #ifndef SD_CARD_H
 #define SD_CARD_H
 
-#include "NewtonROMReader.h"
+#include "NewtonRomReader.h"
 
 #define SPI_DRIVER_SELECT 2
 #include <RingBuf.h>

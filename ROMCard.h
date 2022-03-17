@@ -2,7 +2,7 @@
 #ifndef ROM_CARD_H
 #define ROM_CARD_H
 
-#include "NewtonROMReader.h"
+#include "NewtonRomReader.h"
 
 #include <Arduino.h>
 

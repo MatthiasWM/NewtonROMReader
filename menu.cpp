@@ -1,7 +1,7 @@
 
 #include "menu.h"
 
-#include "NewtonROMReader.h"
+#include "NewtonRomReader.h"
 #include "ROMCard.h"
 
 

@@ -13,7 +13,7 @@
 
 // TODO: dump ROM to SD Card
 
-#include "NewtonROMReader.h"
+#include "NewtonRomReader.h"
 #include "ROMCard.h"
 #include "SDCard.h"
 #include "menu.h"
