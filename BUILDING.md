@@ -3,7 +3,7 @@
 
  - Building the Newton ROM Reader PCB
  - Building the Newton ROM Reader firmware
- - Building the DCL Tools to generate ROM Extensions
+ - Building the DCL Tools and Rex to generate ROM Extensions
  - (not yet) Installing the ARM Cross Assembler to Patch ROMs
 
 ## Building the Newton ROM Reader PCB
@@ -90,7 +90,7 @@ You should see the ROM Programmer's menu on the serial port screen.
 Please run the hardware test before inserting any cards or testing anything else. If short circuits are found, brushing a dry 
 toothbrush along the backside of the SO DIMM connector (the lengthy connector for the ROM Board) may fix the shorts.
 
-## Building the DCL Tools to generate ROM Extensions
+## Building the DCL Tools and Rex to generate ROM Extensions
 
 If you are planning to add Newton apps onto the ROM board, you need to get familiar with the _Rex_ tool. 
 Rex is a command line tool that is part of the DCL toolbox. Compile and install Rex from the command line.
