@@ -67,7 +67,7 @@ class ReadMenuItem : public MenuItem
 public:
   const char *cmd() override { return "r"; }
   void print() override { 
-    printf("  r:  read %s to file \"%s\"\n",
+    printf("  r:  read %s and write to file \"%s\"\n",
            gPageList[gCurrentPage].pName,
            gPageList[gCurrentPage].pFilename);
   }
@@ -124,7 +124,7 @@ std::vector<MenuItem*> gMenuItemList = {
   new PrintMemoryMenuItem(),
   new CheckEmptyMenuItem(),
   new EraseMenuItem(),
-  //new ReadMenuItem(),
+  new ReadMenuItem(),
   new WriteMenuItem(),
   new VerifyMenuItem(),
   new EmptyMenuItem(),

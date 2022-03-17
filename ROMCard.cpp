@@ -21,6 +21,7 @@ std::vector <Page> gPageList = {
 void dataBus(bool active)
 {
   int mode = active ? OUTPUT : INPUT_PULLUP;
+//  int mode = active ? OUTPUT : INPUT;
   pinMode(eggD0, mode);
   pinMode(eggD1, mode);
   pinMode(eggD2, mode);
@@ -268,12 +269,14 @@ uint32_t readWord()
   w = w << 1; if (digitalRead(eggD0)) w += 1;
   digitalWrite(eggROM_IO_RD, 1); // end of read operation
 #else // Due specific (saving about 40% of time on "Verify")
-  digitalWrite(eggROM_IO_RD, 0); // read operation
+  PIOB->PIO_CODR = PIO_CODR_P15; // digitalWrite(eggROM_IO_RD, 0); // read operation
+  asm(" nop\n nop\n nop\n"); // I don't know why I need a delay here, but it will read faulty data without it
+  asm(" nop\n nop\n nop\n");
   uint32_t portA = PIOA->PIO_PDSR;
   uint32_t portB = PIOB->PIO_PDSR;
   uint32_t portC = PIOC->PIO_PDSR;
   uint32_t portD = PIOD->PIO_PDSR;
-  digitalWrite(eggROM_IO_RD, 1); // end of read operation
+  PIOB->PIO_SODR = PIO_SODR_P15; // digitalWrite(eggROM_IO_RD, 1); // PB15, end of read operation 
   if (portA & PIO_PDSR_P0)  w |= PIO_PDSR_P18; // const int eggD18 = 69;  // PA0   A15;
   if (portA & PIO_PDSR_P2)  w |= PIO_PDSR_P10; // const int eggD10 = A7;  // PA2
   if (portA & PIO_PDSR_P4)  w |= PIO_PDSR_P9;  // const int eggD9  = A5;  // PA4

@@ -515,7 +515,7 @@ bool programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
   return (err==0);
 }
 
-// ---- Program ROM File -------------------------------------
+// ---- Verify Flash Memory Block -------------------------------------
 
 /**
  * Verify a block of Flash memeory to a file on SD Card or an OTG Drive.
@@ -524,7 +524,7 @@ bool programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
  * \param[in] inEnd verify up to this address or until the end of file
  * \param[in] inFilename compare to this file
  * 
- * \return true if the erase op did not trigger an error
+ * \return true if the verify op did not trigger an error
  */
 bool verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 {
@@ -566,7 +566,7 @@ bool verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
     if (useSD) {
       int n = file.read(&vFile, 4);
       vFile = htonl(vFile);
-      if (n==0) {
+      if (n<=0) {
         err = 3;
         break;
       }
@@ -574,7 +574,7 @@ bool verifyFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
       UINT n = 0;
       f_read (&fd, &vFile, 4, &n);
       vFile = htonl(vFile);
-      if (n==0) {
+      if (n<=0) {
         err = 3;
         break;
       }
@@ -624,6 +624,107 @@ void verifyFlash(Page &inPage)
   verifyFlash(inPage.pStart, inPage.pEnd, inPage.pFilename);
 }
 
+// ---- Read Flash Memory Block and write it to Mass Storage -------------------------------------
+
+/**
+ * Read a block of Flash memeory and write it to a file on SD Card or an OTG Drive.
+ * 
+ * \param[in] inStart copying process starting at this address
+ * \param[in] inEnd copy up to this address
+ * \param[in] inFilename overwrite this file
+ * 
+ * \return true if the copy op did not trigger an error
+ */
+bool readFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
+{
+  int err = 0;
+  bool useSD = true;
+  FIL fd;
+
+  if (initSDCard()==false) {
+    if (uhstate.state!=UHSTAT_READY) {
+      printf("[ERROR] : No SD card found, no USB drive found.\n");
+      return false;
+    }
+    useSD = false;
+  }
+
+  if (useSD) {
+    if (!file.open(inFilename.c_str(), O_WRONLY)) {
+      printf("[ERROR] : Can't open file \"%s\" on SD card.\n", inFilename.c_str());
+      return false;
+    }
+  } else {
+    // http://mercury.pr.erau.edu/~siewerts/cec450/code/FreeRTOSExampleCode/Demo/Common/FileSystem/FatFs-0.7e/doc/en/open.html
+    if (f_open(&fd, inFilename.c_str(), FA_WRITE|FA_CREATE_ALWAYS) != 0) {
+      printf("[ERROR] : Can't open file \"%s\" on USB drive.\n", inFilename.c_str());
+      return false;
+    }
+  }
+  
+  printf("Press Return to abort:\n");
+  printf(".___.___.___.___.___.___.___.___.\n|");
+  fflush(stdout);
+  
+  activateControlBus();
+  activateAddressBus();
+  activateDataBusRead();
+  
+  uint32_t addr, vFlash;
+  for (addr = inStart; addr < inEnd; addr += 4) {
+    vFlash = readWord(addr);
+    vFlash = htonl(vFlash);
+    if (useSD) {
+      int n = file.write(&vFlash, 4);
+      if (n<=0) {
+        err = 3;
+        break;
+      }
+    } else {
+      UINT n = 0;
+      f_write(&fd, &vFlash, 4, &n);
+      if (n<=0) {
+        err = 3;
+        break;
+      }
+    }
+    if (Serial.read() == '\n') {
+      err = 1;
+      break;
+    }
+    if ((addr & 0x0003ffff) == 0) {
+      printf(":");
+      fflush(stdout);
+    }
+  }
+  
+  deactivateDataBus();
+  deactivateAddressBus();
+  deactivateControlBus();
+
+  if (useSD) {
+    file.close();
+    sd.end();
+  } else {
+    f_close(&fd);
+  }
+
+  printf("\n");
+  if (err==0)
+    printf("[OK] : Flash memory copied to file.\n");
+  else if (err==1)
+    printf("[Aborted] : Operation aborted by user.\n");
+  else if (err==3)
+    printf("[Warning] : Copying Flash memory to file failed at address 0x%08lx.\n", addr);
+    
+  return (err==0);
+}
+
+void readFlash(Page &inPage)
+{
+  readFlash(inPage.pStart, inPage.pEnd, inPage.pFilename);
+}
+
 // ---- Test 1 -----------------------------------------------
 
 // ROM Board connectors:
@@ -640,18 +741,18 @@ void verifyFlash(Page &inPage)
 //   1   0  |  1   0  - access 0x0200.0000 to 0x03ff.ffff (32MB)
 //   1   1  |  1   1  - ROM disabled
 //
-//  MessagePad
-//   Address     ID    page #, filename
+//  Programmer   MessagePad
+//   Address      Address     ID    page #, filename
 // ----------------------------------------------------------
-// 0x0000.0000: ROM   (page 0, rom.bin)
-// 0x0080.0000: REx1  (page 1, rex1.bin)
-// 0x0100.0000: fault, but could probably be mapped to REx2
-// 0x0180.0000: fault, but could probably be mapped to REx3
-// 0x1000.0000: REx4  (page 2, rex2.bin)
-// 0x1080.0000: REx5  (page 3, rex3.bin)
-// 0x1100.0000: REx6
-// 0x1180.0000: REx7
-// 0x1200.0000: REx4 mirror prev ROMs up to 0x2000.0000
+// 0x0000.0000: 0x0000.0000: ROM   (page 0, rom.bin)
+// 0x0080.0000: 0x0080.0000: REx1  (page 1, rex1.bin)
+// 0x0100.0000: 0x0100.0000: fault, but could probably be mapped to REx2
+// 0x0180.0000: 0x0180.0000: fault, but could probably be mapped to REx3
+// 0x0200.0000: 0x1000.0000: REx4  (page 2, rex2.bin)
+// 0x0280.0000: 0x1080.0000: REx5  (page 3, rex3.bin)
+// 0x0300.0000: 0x1100.0000: REx6
+// 0x0380.0000: 0x1180.0000: REx7
+//              0x1200.0000: REx4 mirror prev ROMs up to 0x2000.0000
 
 /**
  * This writes a unique value at every 8MB block. 
@@ -731,8 +832,15 @@ void userSelectPage(int inPage)
   gCurrentPage = inPage;
 }
 
-void userReadPage(int) {
-  // FIXME: write this!
+void userReadPage(int inPage) {
+  if (inPage==-1) 
+  inPage = gCurrentPage;
+  Page &pg = gPageList[inPage];
+
+  printf("Reading Flash memory from \"%s\" and writing it to file \"%s\" ...\n",
+         gPageList[gCurrentPage].pName,
+         gPageList[gCurrentPage].pFilename);
+  readFlash(pg);
 }
 
 // ---- Setup ------------------------------------------------
