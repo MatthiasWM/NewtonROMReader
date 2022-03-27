@@ -1,12 +1,12 @@
 /*
- * To compile this frimware for the Newton ROM Programmer
- *  - downlaod and insatll the Arduino developer environment from arduino.cc
+ * To compile this firmware for the Newton ROM Programmer
+ *  - download and install the Arduino developer environment from arduino.cc
  *  - install the SdFat library by Bill Greiman (Sketch > Include Library > Manage Libraries...)
  *  - select the correct board (Tools > Board > Arduino ARM 32 > Arduino Due (Programming Port))
- *  - connect to the Due Programming Port via USB and slect the serial port (Tools > Port)
+ *  - connect to the Due Programming Port via USB and select the serial port (Tools > Port)
  *  - open this .ino file in the Arduino developer environment
  *  - press Ctrl-R (Cmd-R on Mac) and the program should compile (there may be warnings, but no errors)
- *  - press Ctrl-U (Cmd-U on Mac) to upload your frimware into your Due
+ *  - press Ctrl-U (Cmd-U on Mac) to upload your firmware into your Due
  *  - open the built-in Serial Monitor (Shift-Ctrl-M, Shift-Cmd-M), set the speed to 57600 baud.
  *  - you should see the ROM Programmer's menu on the serial port screen.
  */
@@ -94,7 +94,7 @@ int testForShortCircuits()
   deactivateROMBus();
   deactivateSDBus();
   
-  // check all pins for shortcuts agains ground
+  // check all pins for shortcuts against ground
   printf("Testing for shorts to GND.\n");
   for (size_t i = 0; i < sizeof(eggPin); i++) {
     if (digitalRead(eggPin[i]) == 0) {
@@ -239,7 +239,7 @@ bool printMemoryBlock(uint32_t addr)
 }
 
 /**
- * Interactively print memeory blocks for current page.
+ * Interactively print memory blocks for current page.
  */
 void userPrintMemory()
 {
@@ -519,7 +519,7 @@ bool programFlash(uint32_t inStart, uint32_t inEnd, String inFilename)
 // ---- Verify Flash Memory Block -------------------------------------
 
 /**
- * Verify a block of Flash memeory to a file on SD Card or an OTG Drive.
+ * Verify a block of Flash memory to a file on SD Card or an OTG Drive.
  * 
  * \param[in] inStart verification process starting at this address
  * \param[in] inEnd verify up to this address or until the end of file
@@ -628,7 +628,7 @@ void verifyFlash(Page &inPage)
 // ---- Read Flash Memory Block and write it to Mass Storage -------------------------------------
 
 /**
- * Read a block of Flash memeory and write it to a file on SD Card or an OTG Drive.
+ * Read a block of Flash memory and write it to a file on SD Card or an OTG Drive.
  * 
  * \param[in] inStart copying process starting at this address
  * \param[in] inEnd copy up to this address
