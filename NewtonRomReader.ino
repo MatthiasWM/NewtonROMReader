@@ -1,17 +1,4 @@
-/*
- * To compile this frimware for the Newton ROM Programmer
- *  - downlaod and insatll the Arduino developer environment from arduino.cc
- *  - install the SdFat library by Bill Greiman (Sketch > Include Library > Manage Libraries...)
- *  - select the correct board (Tools > Board > Arduino ARM 32 > Arduino Due (Programming Port))
- *  - connect to the Due Programming Port via USB and slect the serial port (Tools > Port)
- *  - open this .ino file in the Arduino developer environment
- *  - press Ctrl-R (Cmd-R on Mac) and the program should compile (there may be warnings, but no errors)
- *  - press Ctrl-U (Cmd-U on Mac) to upload your frimware into your Due
- *  - open the built-in Serial Monitor (Shift-Ctrl-M, Shift-Cmd-M), set the speed to 57600 baud.
- *  - you should see the ROM Programmer's menu on the serial port screen.
- */
-
-// TODO: dump ROM to SD Card
+// Please see BUILDING.md to build and install this file and other tools
 
 #include "NewtonRomReader.h"
 #include "ROMCard.h"
