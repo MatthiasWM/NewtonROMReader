@@ -24,6 +24,7 @@
 yButton := 10;
 address := 0x10000000;
 data := MakeBinaryFromHex("BEEFCAFE", 'data);
+dataBlock := MakeBinaryFromHex("0102030405060708DEADBEEF", 'data);
 
 kAppName := "ROMBoardTester:WONKO";
 kAppSymbol := '|ROMBoardTester:WONKO|;
@@ -38,14 +39,14 @@ newt.theForm := {
 	},
 	abc: 1,
 	flash: nil,
-	FlashInit:   { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
-	FlashDone:   { class: 'BinCFunction, numArgs: 1, offset: 4, code: ARMCode },
+	FlashInit:        { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
+	FlashDone:        { class: 'BinCFunction, numArgs: 1, offset: 4, code: ARMCode },
 	// Backdoor
-	FlashRead:   { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
-	FlashStatus: { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
-	FlashErase:  { class: 'BinCFunction, numArgs: 2, offset: 20, code: ARMCode },
-	FlashWrite:  { class: 'BinCFunction, numArgs: 3, offset: 24, code: ARMCode },
-	// b writeBlock              @ 28
+	FlashRead:        { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
+	FlashStatus:      { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
+	FlashErase:       { class: 'BinCFunction, numArgs: 2, offset: 20, code: ARMCode },
+	FlashWrite:       { class: 'BinCFunction, numArgs: 3, offset: 24, code: ARMCode },
+	FlashWriteBlock:  { class: 'BinCFunction, numArgs: 3, offset: 28, code: ARMCode },
 	FlashClearStatus: { class: 'BinCFunction, numArgs: 1, offset: 32, code: ARMCode },
 };
 
@@ -81,6 +82,22 @@ StepDeclare(newt.theForm, FlashReadButton, 'FlashReadButton);
 yButton := yButton + 18;
 
 
+FlashRead2Button := {
+	_proto: protoTextButton,
+	text: "Read Flash 2",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashRead(flash, address+4);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashRead2Button);
+StepDeclare(newt.theForm, FlashRead2Button, 'FlashRead2Button);
+yButton := yButton + 18;
+
+
 FlashWriteButton := {
 	_proto: protoTextButton,
 	text: "Write Flash",
@@ -94,6 +111,22 @@ FlashWriteButton := {
 };
 AddStepForm(newt.theForm, FlashWriteButton);
 StepDeclare(newt.theForm, FlashWriteButton, 'FlashWriteButton);
+yButton := yButton + 18;
+
+
+FlashWriteBlockButton := {
+	_proto: protoTextButton,
+	text: "Write Block",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashWriteBlock(flash, address, dataBlock);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashWriteBlockButton);
+StepDeclare(newt.theForm, FlashWriteBlockButton, 'FlashWriteBlockButton);
 yButton := yButton + 18;
 
 
