@@ -1,4 +1,7 @@
 // Please see BUILDING.md to build and install this file and other tools
+//
+// Written and tested for the Newton FLash ROM board with S29GL512 NOR Flash chips.
+//
 
 #include "NewtonRomReader.h"
 #include "ROMCard.h"

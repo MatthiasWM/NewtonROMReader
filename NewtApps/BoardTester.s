@@ -18,12 +18,12 @@
 @
 
 @ Variable space:
-  .equ kMemAlloc,   0       @ pointer to allocated memory
-  .equ kVFTable,    4       @ pointer to physical jump table in virtual memory
-  .equ kPFTable,    8       @ pointer to physical jump table in physical memory
-  .equ kVBuffer,   12       @ pointer to 1k buffer in virtual memory
-  .equ kPBuffer,   16       @ pointer to 1k buffer in physical memory
-  .equ kReturn,    20       @ 32 bit return value
+  .equ kReturn,     0       @ 32 bit return value
+  .equ kMemAlloc,   4       @ pointer to allocated memory
+  .equ kVFTable,    8       @ pointer to physical jump table in virtual memory
+  .equ kPFTable,   12       @ pointer to physical jump table in physical memory
+  .equ kVBuffer,   16       @ pointer to 1k buffer in virtual memory
+  .equ kPBuffer,   20       @ pointer to 1k buffer in physical memory
   .equ kFSize,     24       @ size of this binary object
 
 @
@@ -32,11 +32,15 @@
 
 @ jump table
 nsJumpTable:
-  b ctor
-  b dtor
-  b checkForBackdoor
-  b readWord
-  b getStatus
+  b ctor                    @  0
+  b dtor                    @  4
+  b checkForBackdoor        @  8
+  b readWord                @ 12
+  b getStatus               @ 16
+  b eraseSector             @ 20
+  b writeWord               @ 24
+  b writeBlock              @ 28
+  b clearStatus             @ 32
 
 @@
 @ Initialize buffers and variables
@@ -76,8 +80,8 @@ ctor:
   @@ now copy all functions that must reside in physical space over here
   @@ check that our functions fit into the allocated space!
   @.word 0xE1200070
-  adr r1, physCodeStart
-  adr r2, physCodeEnd
+  adrl r1, physCodeStart
+  adrl r2, physCodeEnd
   sub r0, r2, r1            @ calculate the size of our Phys code block
   str r0, [r4, #kReturn]    @ and return the size; we should throw an exception if it is over 1k!
   ldr r0, [r4, #kVFTable]
@@ -113,9 +117,9 @@ dtor:
   mov lr, pc
   ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
 
-  ldr r1, [r0]
+  ldr r1, [r0, #kMemAlloc]
   mov r2, #0
-  str r2, [r0]
+  str r2, [r0, #kMemAlloc]
   mov r0, r1
   mov lr, pc
   ldr pc, =0x0014320C       @ DisposePtr()
@@ -201,8 +205,6 @@ getStatus:
   mov lr, pc
   ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
 
-  @ldr r0, =#0x8080
-  @mov r0, r0, lsl #2
   pop {r0-r4, lr}
   mov pc, lr
 
@@ -210,12 +212,7 @@ getStatusSVC:
   push {r0}
   push {r1-r4, lr}
 
-  @ldr r0, [r4, #kPFTable]
-  @mov lr, pc
-  @ldr r0, =#0x8080
-  @str r0, [r4, #kReturn]
-
-  ldr lr, [r4, #kPFTable]   @ call this address in physical space
+  ldr lr, [r4, #kPFTable]   @ call PGetStatus in physical space
   ldr r0, =0x000011B0       @ disable I, D, and W cache, and MMU
   mov r1, pc                @ return here
   ldr pc, =0x007FF004       @ call 'write to control register'
@@ -231,6 +228,47 @@ getStatusSVC:
 @ \param NS Binary Data Block
 @ \param NS Int address
 @ \return NS Int error code or 0
+eraseSector:
+  mov r0, #2
+  push {r0-r5, lr}
+
+  ldr r5, [r2]              @ get the address of the sectpr to erase as an int in r5
+  ldr r5, [r5]
+  mov r5, r5, lsr #2
+
+  mov r0, r1
+  mov lr, pc
+  ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
+  mov r4, r0
+
+  ldr r0, =0x0BADCAFE       @ use backdoor to go into supervisor mode
+  adr r1, eraseSectorSVC
+  mov r2, r5
+  swi 12
+  str r0, [r4, #kReturn]
+
+  ldr r0, [sp, #4]
+  mov lr, pc
+  ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
+
+  pop {r0-r5, lr}
+  mov pc, lr
+
+eraseSectorSVC:
+  push {r0}
+  push {r1-r4, lr}
+
+  @ r2=address
+  ldr lr, [r4, #kPFTable]   @ call this address in physical space
+  add lr, lr, #12           @ PEraseSector
+  ldr r0, =0x000011B0       @ disable I, D, and W cache, and MMU
+  mov r1, pc                @ return here
+  ldr pc, =0x007FF004       @ call 'write to control register'
+  mov r0, r1
+
+  pop {r1-r4, lr}
+  pop {pc}
+  .pool
 
 @@
 @ Write word to Flash
@@ -238,6 +276,62 @@ getStatusSVC:
 @ \param NS Int address
 @ \param NS Binary with 4 bytes
 @ \return NS Int error code or 0
+writeWord:
+  mov     r12, sp           @ create local varaible space
+  stmdb   sp!, {r4-r12, lr-pc}
+  sub     r11, r12, #4
+  sub     sp, sp, #16
+
+  str r1, [sp]              @ sp+0 = self ref
+  ldr r2, [r2]              @ get the address to write as an int in r5
+  ldr r2, [r2]
+  mov r2, r2, lsr #2
+  str r2, [sp, #4]          @ sp+4 = address
+  str r3, [sp, #8]          @ sp+8 = data ref
+
+  mov r0, r3
+  mov lr, pc
+  ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
+  ldr r3, [r0]
+  str r3, [sp, #12]         @ sp+12 = data
+  ldr r0, [sp, #8]          @ get data ref
+  mov lr, pc
+  ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
+
+  ldr r0, [sp]              @ get self ref
+  mov lr, pc
+  ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
+  mov r4, r0                @ self ptr in r4
+
+  ldr r0, =0x0BADCAFE       @ use backdoor to go into supervisor mode
+  adr r1, writeWordSVC
+  ldr r2, [sp, #4]          @ r2 = address
+  ldr r3, [sp, #12]         @ r3 = data
+  swi 12
+  str r0, [r4, #kReturn]
+
+  ldr r0, [sp]              @ get self ref
+  mov lr, pc
+  ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
+
+  mov r0, #2                @ todo: return the flash statsu
+  ldmdb r11, {r4-r11, sp, pc} @ return
+
+writeWordSVC:
+  push {r0}
+  push {r1-r4, lr}
+
+  @ r2=address, r3=data
+  ldr lr, [r4, #kPFTable]   @ call this address in physical space
+  add lr, lr, #8            @ PWriteWord
+  ldr r0, =0x000011B0       @ disable I, D, and W cache, and MMU
+  mov r1, pc                @ return here
+  ldr pc, =0x007FF004       @ call 'write to control register'
+  mov r0, r1
+
+  pop {r1-r4, lr}
+  pop {pc}
+  .pool
 
 @@
 @ Write block to Flash
@@ -245,6 +339,49 @@ getStatusSVC:
 @ \param NS Int address
 @ \param NS Binary with 4 to 1024 bytes
 @ \return NS Int error code or 0
+writeBlock:
+  mov r0, #2
+  mov pc, lr
+  .pool
+
+@@
+@ Clear Flash Status word
+@ \param NS Binary Data Block
+@ \return nil
+clearStatus:
+  mov r0, #2
+  push {r0-r4, lr}
+  mov r0, r1
+  mov lr, pc
+  ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
+  mov r4, r0
+
+  ldr r0, =0x0BADCAFE       @ use backdoor to go into supervisor mode
+  adr r1, clearStatusSVC
+  swi 12
+  str r0, [r4, #kReturn]
+
+  ldr r0, [sp, #4]
+  mov lr, pc
+  ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
+
+  pop {r0-r4, lr}
+  mov pc, lr
+
+clearStatusSVC:
+  push {r0}
+  push {r1-r4, lr}
+
+  ldr lr, [r4, #kPFTable]   @ call this address in physical space
+  add lr, lr, #4            @ PClearStatus
+  ldr r0, =0x000011B0       @ disable I, D, and W cache, and MMU
+  mov r1, pc                @ return here
+  ldr pc, =0x007FF004       @ call 'write to control register'
+  mov r0, r1
+
+  pop {r1-r4, lr}
+  pop {pc}
+.pool
 
 @
 @ 2: ARM implementation of NewtonScript calls
@@ -302,77 +439,93 @@ getStatusSVC:
 @ 3: ARM code that will be move to an address in physical space
 @
 
-@ Jump table
+@@ =============================================================================
 physCodeStart:
+
+@ Jump table
   b PGetStatus
+  b PClearStatus
+  b PWriteWord
+  b PEraseSector
+
 PGetStatus:
   mov lr, r1
 
+PWaitForStatus:
   mov r0, #0
-  ldr r1, =0x00001554
+  ldr r1, =0x00001554       @ 2x S29GL256
   ldr r2, =0x00700070
+PGetStatusLoop:
   str r2, [r1]
-  ldr r1, [r0]
+  ldr r3, [r0]              @ Flash returns busy status in bit 7
+  tst r3, #0x00000080       @ check if the lower bank is busy
+  beq PGetStatusLoop         @ if the bit is 0, it's busy, so try again
+  tst r3, #0x00800000       @ check if the upper bank is busy
+  beq PGetStatusLoop         @ if the bit is 0, it's busy, so try again
 
-  @ldr r1, =#0x1234
-
+  @ both chips are no longer busy, so return the status in r1
+  mov r1, r3
   ldr r0, =0x000011BD       @ enable I, D, and W cache, and MMU
   ldr pc, =0x007FF004       @ call 'write to control register'
 
+PClearStatus:
+  mov lr, r1
 
+  ldr r1, =0x00001554       @ 2x S29GL256
+  ldr r2, =0x00710071
+  str r2, [r1]
 
-  mov pc, lr
-  @ return address in r3
-  @ldr r1, =0x00001554
-  @ldr r2, =0x00700070
-  @str r2, [r1]
-  @ldr r0, [r1]
-  @mov lr, r3
-  @ldr r0, =0x000011BD    @ enable I, D, and W cache, and MMU
-  @ldr pc, =0x007FF004    @ call 'write to control register'
+  b PWaitForStatus          @ continue with reading the status
+
+PWriteWord:                 @ r2=address, r3=data
+  mov lr, r1
+
+  ldr r1, =0x00000555 * 4   @ 2x S29GL256
+  ldr r0, =0x00710071
+  str r0, [r1]              @ clear status
+
+  ldr r0, =0x00AA00AA
+  str r0, [r1]              @ Write Word Cycle 1: 555 AA
+  ldr r1, =0x000002AA * 4
+  ldr r0, =0x00550055
+  str r0, [r1]              @ Write Word Cycle 2: 2AA 55
+  ldr r1, =0x00000555 * 4
+  ldr r0, =0x00A000A0
+  str r0, [r1]              @ Write Word Cycle 2: 555 A0
+  str r3, [r2]              @ Write Word Cycle 3: dest data
+
+  b PWaitForStatus          @ continue with reading the status
+
+PEraseSector:
+  mov lr, r1
+
+  ldr r1, =0x00000555 * 4   @ 2x S29GL256
+  ldr r0, =0x00710071
+  str r0, [r1]              @ clear status
+
+  ldr r0, =0x00AA00AA
+  str r0, [r1]              @ Erase Sector Cycle 1: 555 AA
+  ldr r1, =0x000002AA * 4
+  ldr r0, =0x00550055
+  str r0, [r1]              @ Erase Sector Cycle 2: 2AA 55
+  ldr r1, =0x00000555 * 4
+  ldr r0, =0x00800080
+  str r0, [r1]              @ Erase Sector Cycle 2: 555 80
+  ldr r0, =0x00AA00AA
+  str r0, [r1]              @ Erase Sector Cycle 3: 555 AA
+  ldr r1, =0x000002AA * 4
+  ldr r0, =0x00550055
+  str r0, [r1]              @ Erase Sector Cycle 4: 2AA 55
+  ldr r0, =0x00300030
+  str r0, [r2]              @ Erase Sector Cycle 5: dest 30
+
+  b PWaitForStatus          @ continue with reading the status
+
+  .ascii "pool"
   .pool
+  .ascii "endp"
+
 physCodeEnd:
 
+@@ =============================================================================
 
-@ ...
-
-
-
-      @.word 0xE1200070
-			ldr r0, =0x0badcafe
-			mov r2, #0
-			add r1, pc, #8
-			swi 12					@ enter SVC mode
-			mov r0, r2, lsl #2		@ convert the result into an integer object
-			mov pc, lr				@ return to the interpreter
-
-		svc_call:
-
-			@.word 0xE1200070
-			stmdb sp!, {r0, lr}		@ save return address in r0
-
-			adr r0, runPhys			@ jump to this address in physical RAM
-			mov lr, pc
-			ldr pc, =0x0015BCC8		@ VtoP
-
-			ldr r1, =0x00001554
-			ldr r2, =0x00700070
-			mov r3, #0
-
-			adr r4, returnPhys
-			mov lr, r0				@ return to the ohysical address			
-			ldr r0, =0x000011B0		@ disable I, D, and W cache, and MMU
-			ldr pc, =0x007FF004		@ call 'write to control register'
-
-			@ this code is executed in physical space
-		runPhys:
-			str r2, [r1]
-			ldr r2, [r3]
-
-			mov lr, r4
-			ldr r0, =0x000011BD		@ enable I, D, and W cache, and MMU
-			ldr pc, =0x007FF004		@ call 'write to control register'
-
-		returnPhys:
-			ldmia sp!, {r0, lr}
-			mov pc, r0

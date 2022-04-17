@@ -23,6 +23,7 @@
 
 yButton := 10;
 address := 0x10000000;
+data := MakeBinaryFromHex("BEEFCAFE", 'data);
 
 kAppName := "ROMBoardTester:WONKO";
 kAppSymbol := '|ROMBoardTester:WONKO|;
@@ -42,6 +43,10 @@ newt.theForm := {
 	// Backdoor
 	FlashRead:   { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
 	FlashStatus: { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
+	FlashErase:  { class: 'BinCFunction, numArgs: 2, offset: 20, code: ARMCode },
+	FlashWrite:  { class: 'BinCFunction, numArgs: 3, offset: 24, code: ARMCode },
+	// b writeBlock              @ 28
+	FlashClearStatus: { class: 'BinCFunction, numArgs: 1, offset: 32, code: ARMCode },
 };
 
 FlashInitButton := {
@@ -52,6 +57,7 @@ FlashInitButton := {
 			flash := :FlashInit('FlashROM);
 			Print(flash);
 			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
 		end,
 };
 AddStepForm(newt.theForm, FlashInitButton);
@@ -72,6 +78,54 @@ FlashReadButton := {
 };
 AddStepForm(newt.theForm, FlashReadButton);
 StepDeclare(newt.theForm, FlashReadButton, 'FlashReadButton);
+yButton := yButton + 18;
+
+
+FlashWriteButton := {
+	_proto: protoTextButton,
+	text: "Write Flash",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashWrite(flash, address, data);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashWriteButton);
+StepDeclare(newt.theForm, FlashWriteButton, 'FlashWriteButton);
+yButton := yButton + 18;
+
+
+FlashEraseButton := {
+	_proto: protoTextButton,
+	text: "Erase Sector",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashErase(flash, address);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashEraseButton);
+StepDeclare(newt.theForm, FlashEraseButton, 'FlashEraseButton);
+yButton := yButton + 18;
+
+
+FlashClearStatusButton := {
+	_proto: protoTextButton,
+	text: "Clear Status",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashClearStatus(flash);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashClearStatusButton);
+StepDeclare(newt.theForm, FlashClearStatusButton, 'FlashClearStatusButton);
 yButton := yButton + 18;
 
 
@@ -97,7 +151,7 @@ FlashDoneButton := {
 	viewBounds: RelBounds(10, yButton, 80, 12),
 	ButtonClickScript: func() begin
 			:FlashDone(flash);
-			Print(flash);
+			Print("Flash Done:");
 			Print(StrHexDump(flash, 4));
 		end,
 };
@@ -107,9 +161,7 @@ yButton := yButton + 18;
 
 
 FlashStatusText := {
-	//_proto: clParagraphView,
-	//_proto: protoStaticText,
-	viewBounds: RelBounds(10, yButton, 180, 150-yButton),
+	viewBounds: RelBounds(10, yButton, 180, 200-yButton),
 	viewClass: clParagraphView,
 	viewJustify: 0,
 	viewFlags: vVisible,
