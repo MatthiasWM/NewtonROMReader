@@ -21,6 +21,9 @@
 		Permission Mask: 0x00000C00, 11 = r/w all
  */
 
+yButton := 10;
+address := 0x10000000;
+
 kAppName := "ROMBoardTester:WONKO";
 kAppSymbol := '|ROMBoardTester:WONKO|;
 kAppLabel := "ROMBoard Tester";
@@ -37,14 +40,14 @@ newt.theForm := {
 	FlashInit:   { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
 	FlashDone:   { class: 'BinCFunction, numArgs: 1, offset: 4, code: ARMCode },
 	// Backdoor
-	// ReadWord
+	FlashRead:   { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
 	FlashStatus: { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
 };
 
 FlashInitButton := {
 	_proto: protoTextButton,
 	text: "Flash Init",
-	viewBounds: RelBounds(10, 10, 80, 12),
+	viewBounds: RelBounds(10, yButton, 80, 12),
 	ButtonClickScript: func() begin
 			flash := :FlashInit('FlashROM);
 			Print(flash);
@@ -53,12 +56,29 @@ FlashInitButton := {
 };
 AddStepForm(newt.theForm, FlashInitButton);
 StepDeclare(newt.theForm, FlashInitButton, 'FlashInitButton);
+yButton := yButton + 18;
+
+
+FlashReadButton := {
+	_proto: protoTextButton,
+	text: "Read Flash",
+	viewBounds: RelBounds(10, yButton, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashRead(flash, address);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashReadButton);
+StepDeclare(newt.theForm, FlashReadButton, 'FlashReadButton);
+yButton := yButton + 18;
 
 
 FlashStatusButton := {
 	_proto: protoTextButton,
 	text: "Flash Status",
-	viewBounds: RelBounds(10, 10+18, 80, 12),
+	viewBounds: RelBounds(10, yButton, 80, 12),
 	ButtonClickScript: func() begin
 			ret := :FlashStatus(flash);
 			Print(ret);
@@ -68,12 +88,13 @@ FlashStatusButton := {
 };
 AddStepForm(newt.theForm, FlashStatusButton);
 StepDeclare(newt.theForm, FlashStatusButton, 'FlashStatusButton);
+yButton := yButton + 18;
 
 
 FlashDoneButton := {
 	_proto: protoTextButton,
 	text: "Flash Done",
-	viewBounds: RelBounds(10, 10+2*18, 80, 12),
+	viewBounds: RelBounds(10, yButton, 80, 12),
 	ButtonClickScript: func() begin
 			:FlashDone(flash);
 			Print(flash);
@@ -82,12 +103,13 @@ FlashDoneButton := {
 };
 AddStepForm(newt.theForm, FlashDoneButton);
 StepDeclare(newt.theForm, FlashDoneButton, 'FlashDoneButton);
+yButton := yButton + 18;
 
 
 FlashStatusText := {
 	//_proto: clParagraphView,
 	//_proto: protoStaticText,
-	viewBounds: RelBounds(10, 10+3*18, 180, 100),
+	viewBounds: RelBounds(10, yButton, 180, 150-yButton),
 	viewClass: clParagraphView,
 	viewJustify: 0,
 	viewFlags: vVisible,
@@ -137,9 +159,9 @@ Test1Result := {
 		runPhys:
 			str r2, [r1]
 			ldr r2, [r3]
-      mov lr, r4
-      ldr r0, =0x000011BD             @ enable I, D, and W cache, and MMU
-      ldr pc, =0x007FF004             @ call 'write to control register'
+			mov lr, r4
+			ldr r0, =0x000011BD             @ enable I, D, and W cache, and MMU
+			ldr pc, =0x007FF004             @ call 'write to control register'
 
 		returnPhys:
 			ldmia sp!, {r0, lr}

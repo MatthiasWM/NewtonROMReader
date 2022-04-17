@@ -76,9 +76,11 @@ ctor:
   @@ now copy all functions that must reside in physical space over here
   @@ check that our functions fit into the allocated space!
   @.word 0xE1200070
-  ldr r0, [r4, #kVFTable]
   adr r1, physCodeStart
   adr r2, physCodeEnd
+  sub r0, r2, r1            @ calculate the size of our Phys code block
+  str r0, [r4, #kReturn]    @ and return the size; we should throw an exception if it is over 1k!
+  ldr r0, [r4, #kVFTable]
 copyAllCode:
   ldmia r1!, {r3}
   stmia r0!, {r3}
@@ -141,9 +143,41 @@ checkForBackkdoor:
 @ \param NS Int address
 @ \return NS Int error code or NS Binary with value
 readWord:
-  @ 0x00018CA4: LoadFromPhysAddress
   mov r0, #2
+  push {r0-r5, lr}
+
+  ldr r5, [r2]              @ get the address to read as an int in r5
+  ldr r5, [r5]
+  mov r5, r5, lsr #2
+
+  mov r0, r1
+  mov lr, pc
+  ldr pc, =0x0031C9F0       @ LockedBinaryPtr(RefVar const &)
+  mov r4, r0
+
+  ldr r0, =0x0BADCAFE       @ use backdoor to go into supervisor mode
+  adr r1, readWordSVC
+  mov r2, r5
+  swi 12
+  str r0, [r4, #kReturn]
+
+  ldr r0, [sp, #4]
+  mov lr, pc
+  ldr pc, =0x0031CA28       @ UnlockRefArg(RefVar const &)
+
+  pop {r0-r5, lr}
   mov pc, lr
+
+readWordSVC:
+  push {r0}
+  push {r1-r4, lr}
+
+  mov r0, r2
+  mov lr, pc
+  ldr pc, =0x00018CA4       @ LoadFromPhysAddress()
+
+  pop {r1-r4, lr}
+  pop {pc}
   .pool
 
 @@
