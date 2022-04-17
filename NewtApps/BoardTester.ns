@@ -25,20 +25,78 @@ kAppName := "ROMBoardTester:WONKO";
 kAppSymbol := '|ROMBoardTester:WONKO|;
 kAppLabel := "ROMBoard Tester";
 
+ARMCode := MakeBinaryFromARMFile("BoardTester.s");
+
 newt.theForm := {
 	_proto: protoFloatNGo,
 	viewBounds: {
-		left: 0, top: 50, right: 200, bottom: 120
-	}	
+		left: 0, top: 50, right: 200, bottom: 320
+	},
+	abc: 1,
+	flash: nil,
+	FlashInit:   { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
+	FlashDone:   { class: 'BinCFunction, numArgs: 1, offset: 4, code: ARMCode },
+	// Backdoor
+	// ReadWord
+	FlashStatus: { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
 };
 
-Test1Button := {
+FlashInitButton := {
 	_proto: protoTextButton,
-	text: "Test 1",
-	viewBounds: RelBounds(10, 10, 60, 16)
+	text: "Flash Init",
+	viewBounds: RelBounds(10, 10, 80, 12),
+	ButtonClickScript: func() begin
+			flash := :FlashInit('FlashROM);
+			Print(flash);
+			Print(StrHexDump(flash, 4));
+		end,
 };
-AddStepForm(newt.theForm, Test1Button);
-StepDeclare(newt.theForm, Test1Button, 'Test1Button);
+AddStepForm(newt.theForm, FlashInitButton);
+StepDeclare(newt.theForm, FlashInitButton, 'FlashInitButton);
+
+
+FlashStatusButton := {
+	_proto: protoTextButton,
+	text: "Flash Status",
+	viewBounds: RelBounds(10, 10+18, 80, 12),
+	ButtonClickScript: func() begin
+			ret := :FlashStatus(flash);
+			Print(ret);
+			Print(StrHexDump(flash, 4));
+			SetValue(FlashStatusText, 'text, StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashStatusButton);
+StepDeclare(newt.theForm, FlashStatusButton, 'FlashStatusButton);
+
+
+FlashDoneButton := {
+	_proto: protoTextButton,
+	text: "Flash Done",
+	viewBounds: RelBounds(10, 10+2*18, 80, 12),
+	ButtonClickScript: func() begin
+			:FlashDone(flash);
+			Print(flash);
+			Print(StrHexDump(flash, 4));
+		end,
+};
+AddStepForm(newt.theForm, FlashDoneButton);
+StepDeclare(newt.theForm, FlashDoneButton, 'FlashDoneButton);
+
+
+FlashStatusText := {
+	//_proto: clParagraphView,
+	//_proto: protoStaticText,
+	viewBounds: RelBounds(10, 10+3*18, 180, 100),
+	viewClass: clParagraphView,
+	viewJustify: 0,
+	viewFlags: vVisible,
+	viewFont: ROM_fontsystem9bold,
+	text: "Flash Status output",
+};
+AddStepForm(newt.theForm, FlashStatusText);
+StepDeclare(newt.theForm, FlashStatusText, 'FlashStatusText);
+
 
 
 
@@ -71,7 +129,7 @@ Test1Result := {
 			mov r3, #0
 
 			adr r4, returnPhys
-			mov lr, r0				@ return to the ohysical address			
+			mov lr, r0				@ return to the physical address
 			ldr r0, =0x000011B0		@ disable I, D, and W cache, and MMU
 			ldr pc, =0x007FF004		@ call 'write to control register'
 
@@ -79,10 +137,9 @@ Test1Result := {
 		runPhys:
 			str r2, [r1]
 			ldr r2, [r3]
-
-			mov lr, r4
-			ldr r0, =0x000011BD		@ enable I, D, and W cache, and MMU
-			ldr pc, =0x007FF004		@ call 'write to control register'
+      mov lr, r4
+      ldr r0, =0x000011BD             @ enable I, D, and W cache, and MMU
+      ldr pc, =0x007FF004             @ call 'write to control register'
 
 		returnPhys:
 			ldmia sp!, {r0, lr}
@@ -98,6 +155,6 @@ Test1Result := {
 	text: "Result",
 	viewBounds: RelBounds(75, 12, 60, 10)
 };
-AddStepForm(newt.theForm, Test1Result);
-StepDeclare(newt.theForm, Test1Result, 'Test1Result);
+//AddStepForm(newt.theForm, Test1Result);
+//StepDeclare(newt.theForm, Test1Result, 'Test1Result);
 
