@@ -26,6 +26,10 @@
   .equ kPBuffer,   20       @ pointer to 1k buffer in physical memory
   .equ kFSize,     24       @ size of this binary object
 
+@ Constants:
+  .equ kHdWr_DMAEnableStat, 0x0F098000
+  .equ kHdWr_DMADisable,    0x0F098400
+
 @
 @ 1: provide a NewtonScript interface for all functions
 @
@@ -259,6 +263,15 @@ eraseSectorSVC:
   push {r0}
   push {r1-r8, lr}
 
+  @# disable all currently running DMA channels
+  @ldr r7, =#kHdWr_DMAEnableStat
+  @ldr r8, [r7]
+  @ldr r7, =#kHdWr_DMADisable
+  @@str r8, [r7]
+  @push {r8}
+  @mov r8, #0xffffffff
+  @str r8, [r7]
+
   @ r2=address
   ldr lr, [r4, #kPFTable]   @ call this address in physical space
   add lr, lr, #12           @ PEraseSector
@@ -266,6 +279,11 @@ eraseSectorSVC:
   mov r1, pc                @ return here
   ldr pc, =0x007FF004       @ call 'write to control register'
   mov r0, r1
+
+  @# reenable all previously running DMA channels
+  @pop {r8}
+  @ldr r7, =#kHdWr_DMAEnableStat
+  @str r8, [r7]
 
   pop {r1-r8, lr}
   pop {pc}

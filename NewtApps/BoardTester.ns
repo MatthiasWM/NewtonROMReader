@@ -22,7 +22,8 @@
  */
 
 yButton := 10;
-address := 0x10000000;
+kFlashSector := 0x00040000;	// A sector ist 128k *2 for two Flash chips
+address := 0x10800000 + kFlashSector; // Write a sector that is likely unused in page 3
 data := MakeBinaryFromHex("BEEFCAFE", 'data);
 dataBlock := MakeBinaryFromHex("0102030405060708DEADBEEF", 'data);
 
@@ -37,6 +38,19 @@ newt.theForm := {
 	viewBounds: {
 		left: 0, top: 50, right: 200, bottom: 320
 	},
+	penSoundEffectsOld: 1,
+	ViewSetupFormScript: func() begin
+		penSoundEffectsOld := GetUserConfig('penSoundEffects);
+		SetUserConfig('penSoundEffects, NIL);
+		// Playing a sound can possibly crash the erase and write process
+		// We disable the button tap sound temporarily. Other strategies:
+		// SetVolume(0);  - will this disable any sound that is played, or just make it inaudible?
+		// PlaySoundIrregardless(deepclone(ROM_click));  - will this interrupt the currently playing sound in ROM and play one from RAM instead?
+	end,
+	ViewQuitScript: func() begin
+		SetUserConfig('penSoundEffects, penSoundEffectsOld);
+		inherited:?viewQuitScript();
+	end,
 	abc: 1,
 	flash: nil,
 	FlashInit:        { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
@@ -44,10 +58,12 @@ newt.theForm := {
 	// Backdoor
 	FlashRead:        { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
 	FlashStatus:      { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
+	// TODO: If erase fails (bit 5 = 1), write Clear Status sequence to reenable ROM
 	FlashErase:       { class: 'BinCFunction, numArgs: 2, offset: 20, code: ARMCode },
 	FlashWrite:       { class: 'BinCFunction, numArgs: 3, offset: 24, code: ARMCode },
 	FlashWriteBlock:  { class: 'BinCFunction, numArgs: 3, offset: 28, code: ARMCode },
 	FlashClearStatus: { class: 'BinCFunction, numArgs: 1, offset: 32, code: ARMCode },
+	//TODO:  Blank Check, write to SectorAddress+0x555 0x33, status register bit 5 is 0 if Blank (8.5ms)
 };
 
 FlashInitButton := {
@@ -135,6 +151,7 @@ FlashEraseButton := {
 	text: "Erase Sector",
 	viewBounds: RelBounds(10, yButton, 80, 12),
 	ButtonClickScript: func() begin
+			// WARNING: playing sounds from ROM while erasing will crash the machine!
 			ret := :FlashErase(flash, address);
 			Print(ret);
 			Print(StrHexDump(flash, 4));
@@ -203,65 +220,4 @@ FlashStatusText := {
 };
 AddStepForm(newt.theForm, FlashStatusText);
 StepDeclare(newt.theForm, FlashStatusText, 'FlashStatusText);
-
-
-
-
-Test1Result := {
-	_proto: protoStaticText,
-	nativeMath: {
-		class : 'BinCFunction,
-		numArgs: 2,
-		offset: 0,
-		code: MakeBinaryFromARM("
-			@.word 0xE1200070
-			ldr r0, =0x0badcafe
-			mov r2, #0
-			add r1, pc, #8
-			swi 12					@ enter SVC mode
-			mov r0, r2, lsl #2		@ convert the result into an integer object
-			mov pc, lr				@ return to the interpreter
-
-		svc_call:
-
-			@.word 0xE1200070
-			stmdb sp!, {r0, lr}		@ save return address in r0
-
-			adr r0, runPhys			@ jump to this address in physical RAM
-			mov lr, pc
-			ldr pc, =0x0015BCC8		@ VtoP
-
-			ldr r1, =0x00001554
-			ldr r2, =0x00700070
-			mov r3, #0
-
-			adr r4, returnPhys
-			mov lr, r0				@ return to the physical address
-			ldr r0, =0x000011B0		@ disable I, D, and W cache, and MMU
-			ldr pc, =0x007FF004		@ call 'write to control register'
-
-			@ this code is executed in physical space
-		runPhys:
-			str r2, [r1]
-			ldr r2, [r3]
-			mov lr, r4
-			ldr r0, =0x000011BD             @ enable I, D, and W cache, and MMU
-			ldr pc, =0x007FF004             @ call 'write to control register'
-
-		returnPhys:
-			ldmia sp!, {r0, lr}
-			mov pc, r0
-			")
-	},
-	newtonScriptMath: func(a, b) begin
-		return a+b;
-	end,
-	ViewSetupFormScript: func() begin
-		SetValue(self, 'text, NumberStr( self:nativeMath(4, 8) ) );
-	end,
-	text: "Result",
-	viewBounds: RelBounds(75, 12, 60, 10)
-};
-//AddStepForm(newt.theForm, Test1Result);
-//StepDeclare(newt.theForm, Test1Result, 'Test1Result);
 
