@@ -1,0 +1,131 @@
+//
+// Rex Writer
+//
+// Ask user for a Rex file and create a package that will program our 
+// Flash board with the contents of the Rex.
+//
+
+kFlashSector := 0x00040000;	// A sector ist 128k *2 for two Flash chips
+address := 0x10000000; // Write a sector that is likely unused in page 3
+
+filename := "TestRex.rex";
+
+kAppName := "RexWriter:WONKO";
+kAppSymbol := '|RexWriter:WONKO|;
+kAppLabel := "Rex Writer";
+
+
+f := File:new();
+f:Open( filename, 'read );
+if not f:isOpen() then begin
+	Print("Can't open file.\n");
+	throw('|evt.ex.ms|, "Can't open file.");
+end;
+n := f:size();
+if n=0 then begin
+	print("File is empty.\n");
+	throw('|evt.ex.ms|, "File is empty.");
+end;
+nSegs := ((n-1) div 1024) + 1;
+segs := [];
+for i:=0 to nSegs-1 do begin
+	AddArraySlot( segs, f:Read(1024) );
+end;
+f:Close();
+
+Print(n && "bytes found and stored in" && nSegs && "segments.\n");
+
+
+ARMCode := MakeBinaryFromARMFile("BoardTester.s");
+
+newt.theForm := {
+	_proto: protoFloatNGo,
+	viewBounds: {
+		left: 0, top: 50, right: 150, bottom: 180
+	},
+	penSoundEffectsOld: 1,
+	ViewSetupFormScript: func() begin
+		penSoundEffectsOld := GetUserConfig('penSoundEffects);
+		SetUserConfig('penSoundEffects, NIL);
+	end,
+	ViewQuitScript: func() begin
+		SetUserConfig('penSoundEffects, penSoundEffectsOld);
+		inherited:?viewQuitScript();
+	end,
+	abc: 1,
+	flash: nil,
+	FlashInit:        { class: 'BinCFunction, numArgs: 1, offset: 0, code: ARMCode },
+	FlashDone:        { class: 'BinCFunction, numArgs: 1, offset: 4, code: ARMCode },
+	// Backdoor
+	FlashRead:        { class: 'BinCFunction, numArgs: 2, offset: 12, code: ARMCode },
+	FlashStatus:      { class: 'BinCFunction, numArgs: 1, offset: 16, code: ARMCode },
+	// TODO: If erase fails (bit 5 = 1), write Clear Status sequence to reenable ROM
+	FlashErase:       { class: 'BinCFunction, numArgs: 2, offset: 20, code: ARMCode },
+	FlashWrite:       { class: 'BinCFunction, numArgs: 3, offset: 24, code: ARMCode },
+	FlashWriteBlock:  { class: 'BinCFunction, numArgs: 3, offset: 28, code: ARMCode },
+	FlashClearStatus: { class: 'BinCFunction, numArgs: 1, offset: 32, code: ARMCode },
+	//TODO:  Blank Check, write to SectorAddress+0x555 0x33, status register bit 5 is 0 if Blank (8.5ms)
+};
+
+
+DisableRexButton := {
+	_proto: protoTextButton,
+	text: "1: Disable old Rex2",
+	viewBounds: RelBounds(10, 10, 150-20, 12),
+	ButtonClickScript: func() begin
+			flash := :FlashInit('FlashROM);
+			:FlashWrite(flash, address, MakeBinaryFromHex("00000000"));
+			:FlashDone(flash);
+			ModalConfirm( "The old Rex is now disabled.\r\rPlease reboot.", [ "OK" ] );
+		end,
+};
+AddStepForm(newt.theForm, DisableRexButton);
+StepDeclare(newt.theForm, DisableRexButton, 'DisableRexButton);
+
+
+Reboot1Button := {
+	_proto: protoTextButton,
+	text: "2: Reboot",
+	viewBounds: RelBounds(10, 30, 150-20, 12),
+	ButtonClickScript: func() begin
+			Reboot();
+		end,
+};
+AddStepForm(newt.theForm, Reboot1Button);
+StepDeclare(newt.theForm, Reboot1Button, 'Reboot1Button);
+
+
+WriteRexButton := {
+	_proto: protoTextButton,
+	segList : segs,
+	text: "3: Write new Rex2",
+	viewBounds: RelBounds(10, 60, 150-20, 12),
+	ButtonClickScript: func() begin
+			flash := :FlashInit('FlashROM);
+			// TODO: add a progress bar
+			:FlashErase(flash, address);
+			dst := address;
+			for i:=0 to Length(segList)-1 do begin
+				:FlashWriteBlock(flash, dst, segList[i]); 
+				dst := dst + 1024;
+			end;
+			:FlashDone(flash);
+			ModalConfirm( "The new Rex is now installed.\r\rPlease reboot.", [ "OK" ] );
+		end,
+};
+AddStepForm(newt.theForm, WriteRexButton);
+StepDeclare(newt.theForm, WriteRexButton, 'WriteRexButton);
+
+
+Reboot2Button := {
+	_proto: protoTextButton,
+	text: "4: Reboot again",
+	viewBounds: RelBounds(10, 80, 150-20, 12),
+	ButtonClickScript: func() begin
+			Reboot();
+		end,
+};
+AddStepForm(newt.theForm, Reboot2Button);
+StepDeclare(newt.theForm, Reboot2Button, 'Reboot2Button);
+
+
